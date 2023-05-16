@@ -24,7 +24,7 @@ Install the new version with `pip install -e .`
 
 #### Booting the website
 
-Now that your miner is running, it's time to build and launch the website. In the `bittensor-iamge-generation-webui` directory run the following.
+Now that your miner is running, it's time to build and launch the website. In the `bittensor-image-generation-webui` directory run the following.
 
 `npm run build` - alternatively if you're actively making changes you can run `nodemon` which will rerun this command on any `/src` file changes.
 
