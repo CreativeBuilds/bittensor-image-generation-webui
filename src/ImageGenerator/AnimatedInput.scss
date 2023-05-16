@@ -1,0 +1,62 @@
+.animated-input-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+  }
+  
+  .input-field {
+    position: relative;
+    display: inline-block;
+    // border: 2px solid #ccc;
+    padding: 10px;
+    transition: border-color 0.3s ease;
+  
+    &.focused {
+      border-color: #4c7ef3;
+    }
+  
+    input {
+      border: none;
+      outline: none;
+      background: transparent;
+      font-size: 16px;
+      width: 200px;
+      transition: color 0.3s ease;
+    }
+  
+    .example-prompt {
+      position: absolute;
+      top: 50%;
+      left: 10px;
+      transform: translateY(-50%);
+      color: #999;
+      font-size: 16px;
+      transition: opacity 0.3s ease;
+  
+      &.focused {
+        opacity: 0;
+      }
+    }
+  
+    .blinking-cursor {
+      position: absolute;
+      top: 50%;
+      right: 12px;
+      transform: translateY(-50%);
+      width: 2px;
+      height: 20px;
+      background-color: #333;
+      animation: blinkCursor 0.8s step-end infinite;
+    }
+  }
+  
+  @keyframes blinkCursor {
+    0%, 100% {
+      opacity: 0;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+  
