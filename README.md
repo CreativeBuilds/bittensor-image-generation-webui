@@ -8,7 +8,7 @@ Then install venv if you haven't already with `sh setup.sh`
 
 **Make sure to enable the virtual environment after running setup.sh**
 
-Once your virtual environment, install requirements for python and node with `sh install.sh` alternatively run `pip install -r requirements.txt` and `npm install`
+Once your virtual environment is up and running, install requirements for python and node with `sh install.sh` alternatively run `pip install -r requirements.txt` and `npm install`
 
 #### Booting a testnet image miner
 
