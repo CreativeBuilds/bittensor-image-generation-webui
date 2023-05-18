@@ -22,6 +22,10 @@ Swap the activate branch from master to `fast_text_prompting` with `git checkout
 
 Install the new version with `pip install -e .`
 
+Once you're installed you'll need to run the miner with `python neurons/text_to_image/miners/neuron.py --subtensor.chain_endpoint wss://test.finney.opentensor.ai  --logging.debug --neuron.model_name prompthero/openjourney --netuid 14`
+
+Replace `prompthero/openjourney` with any stable diffusion model on huggingface.
+
 #### Booting the website
 
 Now that your miner is running, it's time to build and launch the website. In the `bittensor-image-generation-webui` directory run the following.
