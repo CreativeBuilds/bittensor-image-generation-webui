@@ -32,7 +32,9 @@ Now that your miner is running, it's time to build and launch the website. In th
 
 `npm run build` - alternatively if you're actively making changes you can run `nodemon` which will rerun this command on any `/src` file changes.
 
-Next serve the files you just built with `python server.py`
+Next serve the files you just built with `python server.py` 
+
+Some arguments you can pass into `python server.py` include `--port [your port]` if you wish to set a specific port. Default is 8093. `--axon.ip [axon ip]` and `--axon.port [axon port]` if you are connecting to a remote axon that isn't locally hosted.
 
 If everything was run correctly, you should now see the site at http://0.0.0.0:8093
 

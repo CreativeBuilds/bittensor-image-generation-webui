@@ -2,7 +2,14 @@ from flask import Flask, request, send_from_directory
 import requests
 import os
 import bittensor as bt
+import argparse
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--port', type=int, default=8093, help='Port number (default: {})'.format(DEFAULT_PORT))
+parser.add_argument('--axon.ip', type=str, default="0.0.0.0", help='Axon IP address (default: {})'.format(DEFAULT_AXON_IP))
+parser.add_argument('--axon.port', type=int, default=8092, help='Axon port number (default: {})'.format(DEFAULT_AXON_PORT))
+
+args = parser.parse_args()
 
 app = Flask(__name__, static_folder='build', static_url_path='/')
 use_local_api = False
@@ -12,7 +19,7 @@ mg = bt.metagraph(netuid=14, network='test')
 mg.sync()
 
 wallet = bt.wallet().create_if_non_existent()
-axon = bt.axon( wallet = wallet, port = 9090, ip = "127.0.0.1" )
+axon = bt.axon( wallet = wallet, port = args.axon.port, ip = args.axon.ip)
 texttoimage = bt.text_to_image( keypair=wallet.hotkey, axon=axon.info())
 
 # Serve the ./build folder
