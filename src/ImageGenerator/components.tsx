@@ -1,7 +1,7 @@
 import styled, { css } from 'styled-components';
 import { CookieInput, CookieTextarea } from '../CookieInput';
 
-const NoBoundaryInput = styled(CookieInput)`
+export const NoBoundaryCookieInput = styled(CookieInput)`
   border: none;
   outline: none;
   background: none;
@@ -17,7 +17,7 @@ const NoBoundaryInput = styled(CookieInput)`
         border-bottom: 5px solid #fff;
     }
 `;
-export const NoBoundaryTextarea = styled(CookieTextarea)`
+export const NoBoundaryCookieTextarea = styled(CookieTextarea)`
   border: none;
   outline: none;
   background: none;
