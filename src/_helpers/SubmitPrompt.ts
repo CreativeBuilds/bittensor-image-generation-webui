@@ -6,7 +6,7 @@ export const SubmitPrompt = ({
   prompt: string;
   negativePrompt: string;
   ratio: { width: number; height: number; };
-}, callback: (data: string) => void) => {
+}, callback: (data: string[]) => void) => {
 
   const { width, height } = ratio;
 

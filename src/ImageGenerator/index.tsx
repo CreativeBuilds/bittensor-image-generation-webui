@@ -32,10 +32,10 @@ const App: React.FC = () => {
       timeoutRef.current = window.setTimeout(() => {
         setShowImages(true);
       }, 1500);
-      
+
     }
   }, [imagesRef.current, processing]);
-  
+
   
   function Reload() {
     console.log("Reload called")
@@ -58,7 +58,10 @@ const App: React.FC = () => {
     ratio,
   }) => {
     TriggerPromptInputFadeOut(setProcessing, setShowPrompt);
-    SubmitPrompt({ prompt, negativePrompt, ratio }, Reload);
+    SubmitPrompt({ prompt, negativePrompt, ratio }, (data) => {
+      imagesRef.current = data;
+      Reload();
+    })
   }
 
   return (
@@ -98,4 +101,3 @@ function TriggerPromptInputFadeOut(setProcessing: React.Dispatch<React.SetStateA
     setShowPrompt(false);
   }, 1000);
 }
-
