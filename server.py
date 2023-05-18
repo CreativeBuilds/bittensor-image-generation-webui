@@ -5,9 +5,14 @@ import bittensor as bt
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--port', type=int, default=8093, help='Port number (default: {})'.format(DEFAULT_PORT))
-parser.add_argument('--axon.ip', type=str, default="0.0.0.0", help='Axon IP address (default: {})'.format(DEFAULT_AXON_IP))
-parser.add_argument('--axon.port', type=int, default=8092, help='Axon port number (default: {})'.format(DEFAULT_AXON_PORT))
+
+DEFAULT_PORT = 8093
+DEFAULT_AXON_IP = "0.0.0.0"
+DEFAULT_AXON_PORT = 8092
+
+parser.add_argument('--port', type=int, default=DEFAULT_PORT, help='Port number (default: {})'.format(DEFAULT_PORT))
+parser.add_argument('--axon.ip', type=str, default=DEFAULT_AXON_IP, help='Axon IP address (default: {})'.format(DEFAULT_AXON_IP))
+parser.add_argument('--axon.port', type=int, default=DEFAULT_AXON_PORT, help='Axon port number (default: {})'.format(DEFAULT_AXON_PORT))
 
 args = parser.parse_args()
 
