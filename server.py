@@ -4,12 +4,10 @@ import os
 import bittensor as bt
 import argparse
 
-print(dir(bt))
-
 parser = argparse.ArgumentParser()
 
 DEFAULT_PORT = 8093
-DEFAULT_AXON_IP = "0.0.0.0"
+DEFAULT_AXON_IP = "127.0.0.1"
 DEFAULT_AXON_PORT = 9090
 
 parser.add_argument('--port', type=int, default=DEFAULT_PORT, help='Port number (default: {})'.format(DEFAULT_PORT))
