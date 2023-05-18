@@ -4,6 +4,8 @@ import os
 import bittensor as bt
 import argparse
 
+print(dir(bt))
+
 parser = argparse.ArgumentParser()
 
 DEFAULT_PORT = 8093
@@ -24,7 +26,7 @@ mg = bt.metagraph(netuid=14, network='test')
 mg.sync()
 
 wallet = bt.wallet().create_if_non_existent()
-axon = bt.axon( wallet = wallet, port = args.axon.port, ip = args.axon.ip)
+axon = bt.axon( wallet = wallet, port = args['axon.port'], ip = args['axon.ip'])
 texttoimage = bt.text_to_image( keypair=wallet.hotkey, axon=axon.info())
 
 # Serve the ./build folder
