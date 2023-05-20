@@ -56,7 +56,7 @@ def serve(path):
 # API endpoint to forward the request to the local API
 @app.route('/TextToImage/Forward', methods=['POST'])
 def forward_request():
-    time_to_loop = 1
+    time_to_loop = 4
     request_body = {**request.json, 'num_images_per_prompt': 1}
     print('Forwarding request to local API...')
     responses = []
