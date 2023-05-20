@@ -6,16 +6,20 @@ export interface IImageData {
 }
 
 export const SubmitPrompt = ({
-  prompt, negativePrompt, ratio,
+  prompt, negativePrompt, ratio, image
 }: {
   prompt: string;
   negativePrompt: string;
   ratio: { width: number; height: number; };
+  image?: string;
+
 }, callback: (data: IImageData[]) => void) => {
 
   const { width, height } = ratio;
 
-  GenerateImage({ prompt, height, width, negativePrompt })
+  console.log('SubmitPrompt', { prompt, negativePrompt, width, height, image });
+
+  GenerateImage({ prompt, height, width, negativePrompt, image, strength: image ? 0.75 : undefined })
     .then(({ data, error }) => {
       if (error)
         throw new Error(error);

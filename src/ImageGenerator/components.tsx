@@ -177,6 +177,12 @@ export const ImageGridContainer = styled.div`
         animation-name: fadeImagesIn;
         animation-fill-mode: forwards;
       }
+    &.fadeImageOut > *:nth-child(${index + 1}) {
+      animation-delay: ${delay}s;
+      animation-duration: ${animationDuration}s;
+      animation-name: fadeImagesOut;
+      animation-fill-mode: forwards;
+    }
     `;
 })}
 
@@ -193,6 +199,15 @@ export const ImageGridContainer = styled.div`
       
     }
   }
+  @keyframes fadeImagesOut {
+    100% {
+      opacity: 0;
+      transform: translateY(-1em);
+    }
+    0% {
+      opacity: 1;
+      transform: translateY(0);
+    }
 `;
 interface ImageContainerProps {
   aspectRatio: string;
@@ -201,7 +216,7 @@ export const ImageContainer = styled.div<ImageContainerProps> `
   position: relative;
   overflow: hidden;
   border-radius: 0.5em;
-  transition: all 0.3s ease-in-out;
+  transition: all 0.3s ease-in-out, border 0.1s ease-out;
   max-width: ${minSize};
   max-height: ${minSize};
   aspect-ratio: ${(props) => props.aspectRatio};
@@ -212,6 +227,11 @@ export const ImageContainer = styled.div<ImageContainerProps> `
     box-shadow: 0 0 1em #000000ff;
     border: 0.1em solid #ccddeeff;
     cursor: pointer;
+  }
+
+  &.selected {
+    border: 0.2em solid #fff;
+    
   }
 
 

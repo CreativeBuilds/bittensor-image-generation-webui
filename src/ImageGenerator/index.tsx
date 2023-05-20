@@ -11,6 +11,25 @@ export interface Option {
   value: string;
 }
 
+interface IOffset {
+  width: number;
+  height: number;
+}
+
+interface IRatio {
+  width: number;
+  height: number;
+  offset?: IOffset;
+}
+
+export interface IPromptSubmit {
+  prompt: string;
+  negativePrompt: string;
+  image?: string;
+  // ratio is an object {width: number, height: number}
+  ratio: IRatio;
+}
+
 const App: React.FC = () => {
   
   const [processing, setProcessing] = useState<boolean>(false);
@@ -56,10 +75,13 @@ const App: React.FC = () => {
   const onPromptSubmit = ({
     prompt,
     negativePrompt,
+    image,
     ratio,
-  }) => {
-    TriggerPromptInputFadeOut(setProcessing, setShowPrompt);
-    SubmitPrompt({ prompt, negativePrompt, ratio }, (data) => {
+  }: IPromptSubmit, skipFadeOut = false) => {
+    setShowImages(false);
+    if(!skipFadeOut)TriggerPromptInputFadeOut(setProcessing, setShowPrompt);
+    else {setShowPrompt(false); setProcessing(true); }
+    SubmitPrompt({ prompt, negativePrompt, ratio, image }, (data) => {
       imagesRef.current = data;
       Reload();
     })
@@ -87,7 +109,10 @@ const App: React.FC = () => {
       }
       {
         should_show_images ? (
-          <ImageDisplay images={images} aspectRatio={aspectRatio} onSelectImage={()=>{}}/>
+          <ImageDisplay images={images} aspectRatio={aspectRatio} onSelectImage={()=>{}} onPromptSubmit={(x: IPromptSubmit) => {
+            imagesRef.current = [];
+            onPromptSubmit(x, true);
+          }} />
         ) : null
       }
     </>
