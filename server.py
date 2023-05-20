@@ -3,6 +3,9 @@ import requests
 import os
 import bittensor as bt
 import argparse
+import uuid
+from PIL import Image
+
 
 parser = argparse.ArgumentParser()
 
@@ -24,8 +27,22 @@ mg = bt.metagraph(netuid=14, network='test')
 mg.sync()
 
 wallet = bt.wallet().create_if_non_existent()
-axon = bt.axon( wallet = wallet, port = args['axon.port'], ip = args['axon.ip'])
-texttoimage = bt.text_to_image( keypair=wallet.hotkey, axon=axon.info())
+axon = None
+if(args['axon.ip'] == DEFAULT_AXON_IP and args['axon.port'] == DEFAULT_AXON_PORT):
+    axon = bt.axon( wallet = wallet, port = args['axon.port'], ip = args['axon.ip']).info()
+else:
+    axon = [x for x in mg.axons if x.ip == args['axon.ip'] and x.port == args['axon.port']][0]
+    
+if(axon == None):
+    print(mg.axons)
+    print('Axon not found, using default axon')
+    axon = mg.axons[default_uid]
+
+if(axon == None):
+    print('Axon not found, no connection to network')
+    exit()
+
+texttoimage = bt.text_to_image( keypair=wallet.hotkey, axon=axon)
 
 # Serve the ./build folder
 @app.route('/', defaults={'path': ''})
@@ -39,7 +56,7 @@ def serve(path):
 # API endpoint to forward the request to the local API
 @app.route('/TextToImage/Forward', methods=['POST'])
 def forward_request():
-    time_to_loop = 4
+    time_to_loop = 1
     request_body = {**request.json, 'num_images_per_prompt': 1}
     print('Forwarding request to local API...')
     responses = []
@@ -55,10 +72,13 @@ def forward_request():
                 num_inference_steps=request_body['num_inference_steps'],
                 guidance_scale=request_body['guidance_scale'],
                 negative_prompt=request_body['negative_prompt'],
-                timeout=request_body['timeout'],
+                timeout=request_body['timeout']
             )
-            
-            responses.append(response.image)
+
+            responses.append({
+                'image': response.image,
+                'id': str(uuid.uuid4())
+            })
         return {'data': responses}
     except Exception as e:
         print('Error forwarding request: ', e)

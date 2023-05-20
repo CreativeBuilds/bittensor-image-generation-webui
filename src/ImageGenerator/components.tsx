@@ -1,11 +1,12 @@
 import styled, { css } from 'styled-components';
 import { CookieInput, CookieTextarea } from '../CookieInput';
+import { isPortrait } from '../_helpers';
 
 export const NoBoundaryCookieInput = styled(CookieInput)`
   border: none;
   outline: none;
   background: none;
-  font-size: 1.5rem;
+  font-size: 1.5em;
   color: #fff;
   // style so that text is centered
   text-align: center;
@@ -21,7 +22,7 @@ export const NoBoundaryCookieTextarea = styled(CookieTextarea)`
   border: none;
   outline: none;
   background: none;
-  font-size: 1rem;
+  font-size: 1em;
   color: #fff;
   // style so that text is centered
   text-align: center;
@@ -72,7 +73,7 @@ export const DropdownButton = styled.button`
   text-align: center;
   padding: 8px 0px;
   min-width: 120px;
-    font-size: 1.5rem;
+    font-size: 1.5em;
     outline: none;
     margin: 1.5em 0 0em 0;
 `;
@@ -144,12 +145,9 @@ export const ColumnFlexContainer = styled.div`
   
   
 `;
-// determin width and height of window
-const windowWidth = window.innerWidth;
-const windowHeight = window.innerHeight;
-// calculate if the window is in portrait or landscape mode
-const isPortrait = windowHeight > windowWidth;
+
 const minSize = isPortrait ? '44vw' : '44vh';
+
 export const ImageGridContainer = styled.div`
   display: grid;
   // either 1x1 or 2x2 and use aspect ratio to size images correctly
@@ -159,7 +157,7 @@ export const ImageGridContainer = styled.div`
   align-items: center;
   padding: 1em;
   margin: 0 auto;
-  max-width: 1000px;
+  max-width: ${isPortrait ? '95vw' : '80vw'};
   &.fadeImageIn > * {
     opacity: 0;
   }
@@ -234,7 +232,7 @@ export const GoButton = styled.button`
     text-align: center;
     padding: 8px 0px;
     min-width: 120px;
-    font-size: 1.5rem;
+    font-size: 1em;
     outline: none;
     margin: 0.5em 0;
     &:hover, &:focus{
@@ -263,3 +261,11 @@ export const LoadingText = styled.div`
       animation: fadeInputOut 1s ease-in-out;
     }
 `;
+
+export const InvisibleButton = styled.button`
+    background-color: #00000000;
+    border: none;
+    text-align: center;
+    padding: 0px;
+    margin: 0px;
+    `;

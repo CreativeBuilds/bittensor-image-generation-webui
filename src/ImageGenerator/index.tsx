@@ -4,6 +4,7 @@ import { ColumnFlexContainer, LoadingText } from './components';
 import { ImageDisplay } from './ImageDisplay';
 import { PromptInput } from './PromptInput';
 import { GetAspectRatio, SubmitPrompt } from '../_helpers';
+import { IImageData } from '../_helpers/SubmitPrompt';
 
 export interface Option {
   label: string;
@@ -18,7 +19,7 @@ const App: React.FC = () => {
   const [aspectRatio, setAspectRatio] = useState<string>('1:1');
   
   
-  const imagesRef = useRef<string[]>([]);
+  const imagesRef = useRef<IImageData[]>([]);
   const [lastUpdateImages, setLastUpdateImages] = useState<number>(0);
 
   // ref for timeout
@@ -69,6 +70,7 @@ const App: React.FC = () => {
       {
         should_show_prompt_input ? (
           <PromptInput 
+            style={{ fontSize: '1.75em' }}
             aspectRatio={aspectRatio}
             processing={processing} 
             onPromptSubmit={onPromptSubmit} 
@@ -79,13 +81,13 @@ const App: React.FC = () => {
       {
         should_show_waiting ? (
           <ColumnFlexContainer className={ processing ? 'fadeInputIn' : 'fadeInputOut'}>
-            <LoadingText>One moment...</LoadingText>
+            <LoadingText style={{fontSize: '1.75em'}}>One moment...</LoadingText>
           </ColumnFlexContainer>
         ) : null
       }
       {
         should_show_images ? (
-          <ImageDisplay images={images} ratio={GetAspectRatio(aspectRatio)} onSelectImage={()=>{}}/>
+          <ImageDisplay images={images} aspectRatio={aspectRatio} onSelectImage={()=>{}}/>
         ) : null
       }
     </>

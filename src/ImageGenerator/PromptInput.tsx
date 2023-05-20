@@ -3,10 +3,13 @@ import { ColumnFlexContainer, NoBoundaryCookieTextarea, GoButton } from './compo
 import { AspectRatioDropdown, aspectRatioOptions } from './AspectRatioDropdown';
 import { Option } from '.';
 import { GetAspectRatio } from '../_helpers/GetAspectRatio';
+import { on } from 'events';
 
 interface IPromptInputProps {
   aspectRatio?: string;
+  hideAspectRatio?: boolean;
   processing: boolean;
+  style?: React.CSSProperties;
   onPromptSubmit: ({
     prompt,
     negativePrompt,
@@ -22,11 +25,18 @@ interface IPromptInputProps {
   onAspectRatioChanged: (aspectRatio: string) => void;
 }
 
-export function PromptInput({ aspectRatio: _ar, processing, onPromptSubmit, onAspectRatioChanged }: IPromptInputProps) {
+export function PromptInput({ aspectRatio: _ar, hideAspectRatio: _har, processing, style, onPromptSubmit, onAspectRatioChanged }: IPromptInputProps) {
 
   const [prompt, setPrompt] = useState<string>('');
   const [negativePrompt, setNegativePrompt] = useState<string>('');
   const [aspectRatio, setAspectRatio] = useState<string>(_ar || "1:1");
+
+  
+  useEffect(() => {
+    console.log("PromptInput: aspectRatio: " + _ar);
+    setAspectRatio(_ar || "1:1");
+    onAspectRatioChanged(_ar || "1:1");
+  }, [_ar]);
   
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const negativeInputRef = useRef<HTMLTextAreaElement>(null);
@@ -38,14 +48,11 @@ export function PromptInput({ aspectRatio: _ar, processing, onPromptSubmit, onAs
   }, []);
 
   function handleAspectRatioSelect(selectedOption: Option) {
-    console.log('Selected aspect ratio:', selectedOption.value);
-    // Perform any necessary actions with the selected aspect ratio
     setAspectRatio(selectedOption.value);
+    onAspectRatioChanged(selectedOption.value);
   }
 
-
-
-  return <ColumnFlexContainer className={processing ? 'fadeInputOut' : ''}>
+  return <ColumnFlexContainer className={processing ? 'fadeInputOut' : ''} style={style}>
     <NoBoundaryCookieTextarea
       cookieName="prompt"
       className="input"
@@ -70,7 +77,11 @@ export function PromptInput({ aspectRatio: _ar, processing, onPromptSubmit, onAs
         color: '#ff9999',
         borderColor: '#ff9999'
       }} />
-    <AspectRatioDropdown cookieName="aspect_ratio" options={aspectRatioOptions} onSelect={handleAspectRatioSelect} close={closeDropdown} />
+    { 
+      !_har ?
+        <AspectRatioDropdown cookieName="aspect_ratio" options={aspectRatioOptions} onSelect={handleAspectRatioSelect} close={closeDropdown} />
+      : null
+    }
     <GoButton onFocus={() => closeDropdown.current()} onClick={() => {
       onPromptSubmit({
         prompt,
@@ -83,7 +94,10 @@ export function PromptInput({ aspectRatio: _ar, processing, onPromptSubmit, onAs
         e.preventDefault();
         // if shift is also pressed, focus the dropdown instead
         if (e.shiftKey) {
-          document.getElementById('aspect-ratio')?.focus();
+          if(!_har)
+            document.getElementById('aspect-ratio')?.focus();
+          else
+            negativeInputRef.current?.focus();
         } else {
           inputRef.current?.focus();
         }

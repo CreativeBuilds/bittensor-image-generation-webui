@@ -1,12 +1,17 @@
 import { GenerateImage } from './GenerateImage';
 
+export interface IImageData {
+  image: string;
+  id: string;
+}
+
 export const SubmitPrompt = ({
   prompt, negativePrompt, ratio,
 }: {
   prompt: string;
   negativePrompt: string;
   ratio: { width: number; height: number; };
-}, callback: (data: string[]) => void) => {
+}, callback: (data: IImageData[]) => void) => {
 
   const { width, height } = ratio;
 
