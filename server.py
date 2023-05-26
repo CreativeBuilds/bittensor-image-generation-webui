@@ -5,7 +5,32 @@ import bittensor as bt
 import argparse
 import uuid
 from PIL import Image
+import time
+import asyncio
+import jsonify
+import multiprocessing
+import queue
 
+bt.trace()
+
+def load_ips():
+    with open("ips.txt") as f:
+        lines = f.readlines()
+    ips = []
+    for line in lines:
+        line = line.strip()
+        parts = line.split(",")
+        ip_port = parts[0].split(":")
+        ip = ip_port[0]
+        port = int(ip_port[1])
+        if len(ip_port) > 2:
+            model_type = ip_port[2]
+        elif len(parts) > 1:
+            model_type = parts[1]
+        else:
+            model_type = None
+        ips.append((ip, port, model_type))
+    return ips
 
 parser = argparse.ArgumentParser()
 
@@ -27,22 +52,146 @@ mg = bt.metagraph(netuid=14, network='test')
 mg.sync()
 
 wallet = bt.wallet().create_if_non_existent()
-axon = None
-if(args['axon.ip'] == DEFAULT_AXON_IP and args['axon.port'] == DEFAULT_AXON_PORT):
-    axon = bt.axon( wallet = wallet, port = args['axon.port'], ip = args['axon.ip']).info()
-else:
-    axon = [x for x in mg.axons if x.ip == args['axon.ip'] and x.port == args['axon.port']][0]
+
+ips = load_ips()
+
+class ImageRequest():
+    text = ""
+    negative_prompt = "" 
+    image = ""
+    width = 512
+    height = 512
+    gudiance_scale = 7.5
+    strength = 0.75
+    timeout = 12
+
+    def __init__(self, text, negative_prompt, image, width, height, guidance_scale, strength, timeout = 12, **kwargs):
+        self.text = text
+        self.negative_prompt = negative_prompt
+        self.image = image
+        self.width = width
+        self.height = height
+        self.guidance_scale = guidance_scale
+        self.strength = strength
+        self.timeout = timeout
     
-if(axon == None):
-    print(mg.axons)
-    print('Axon not found, using default axon')
-    axon = mg.axons[default_uid]
+    def __call__(self):
+        print("Calling image request", self)
+        return self
 
-if(axon == None):
-    print('Axon not found, no connection to network')
-    exit()
+class Miner():
+    axon = None
+    ip = None
+    port = None
+    queue = None # queue of images and responses to be processed (uid, ImageRequest, ImageResponse)
+    model_type = "prompthero/openjourney"
+    texttoimage = None
+    responses = None
 
-texttoimage = bt.text_to_image( keypair=wallet.hotkey, axon=axon)
+    # set up a miner object
+    def __init__(self, ip, port, model_type=None):
+        self.ip = ip
+        self.port = port
+        if(model_type != None):
+            self.model_type = model_type
+        # find axon within metagraph
+        self.axon = [x for x in mg.axons if x.ip == ip and x.port == port][0]
+        self.texttoimage = bt.text_to_image( keypair=wallet.hotkey, axon=self.axon)
+        self.queue = multiprocessing.Queue()
+        self.responses = {}  # A dictionary to store the responses
+
+    # add an image to the queue
+    def add_image(self, image_request):
+        # check image_request type
+        if(type(image_request) != ImageRequest):
+            # raise error
+            raise TypeError('image_request must be of type ImageRequest')
+        
+        # Validate that axon isn't None
+        if(self.axon == None):
+            # raise error
+            raise ValueError('Axon is None, cannot add image to queue')
+
+        uid = uuid.uuid4()
+
+        # add image_request to queue
+        self.queue.put((uid, image_request, None))
+        self.responses[uid] = None
+
+        # return uid
+        return uid
+
+    def process_queue(self):
+        while not self.queue.empty():
+            bt.logging.trace("Queue not empty, processing queue")
+            uid, image_request, image_response = self.queue.get()
+
+            bt.logging.trace("Processing image request", image_request)
+            
+            # check if image_response is None
+            if(image_response == None):
+                # Call axon to process image_request
+                image_response = self.texttoimage.forward(
+                    text = image_request.text,
+                    negative_prompt = image_request.negative_prompt,
+                    image = image_request.image,
+                    width = image_request.width,
+                    height = image_request.height,
+                    guidance_scale = image_request.guidance_scale,
+                    strength = image_request.strength,
+                    num_images_per_prompt = 1,
+                    num_inference_steps = 90,
+                    timeout = 12
+                )
+
+                self.responses[uid] = image_response
+
+    def start_queue_processing(self):
+        # use a while loop to continuously process queue
+        while True:
+            self.process_queue()
+            # add sleep to prevent the loop from being too fast and consuming too much resources
+            time.sleep(0.5)
+
+class Miners():
+    # miners has an object where each key is a Miner
+    miners = {}
+
+    # set up a miners object
+    def __init__(self, ips):
+        for ip in ips:
+            miner = Miner(ip=ip[0], port=ip[1])
+            self.miners[miner] = []
+            multiprocessing.Process(target=miner.start_queue_processing).start()
+
+    # add an image to the queue of the miner with the least images in its queue that matches the model_type if provided
+    def add_image(self, image_request, model_type = None):
+        # check image_request type
+        if(type(image_request) != ImageRequest):
+            # raise error
+            raise TypeError('image_request must be of type ImageRequest')
+        
+        # check model_type type
+        if(model_type != None and type(model_type) != str):
+            # raise error
+            raise TypeError('model_type must be of type str')
+        
+
+        # find the miner with the least images in its queue that matches the model_type if provided
+        miner = None
+        if(model_type != None):
+            miner = min([miner for miner in self.miners if miner.model_type == model_type], key=lambda miner: miner.queue.qsize())
+        else:
+            miner = min(self.miners, key=lambda miner: miner.queue.qsize())
+
+        # add image_request to miner's queue
+        uid = miner.add_image(image_request)
+
+        # return uid
+        return uid
+
+
+miners = Miners(ips)
 
 # Serve the ./build folder
 @app.route('/', defaults={'path': ''})
@@ -60,29 +209,57 @@ def forward_request():
     request_body = {**request.json, 'num_images_per_prompt': 1}
     print('Forwarding request to local API...')
     responses = []
-    try:
-        
-        while(len(responses) < time_to_loop):
-            response = texttoimage.forward(
-                text=request_body['text'],
-                image=request_body['image'],
-                height=request_body['height'],
-                width=request_body['width'],
-                num_images_per_prompt=request_body['num_images_per_prompt'],
-                num_inference_steps=request_body['num_inference_steps'],
-                guidance_scale=request_body['guidance_scale'],
-                negative_prompt=request_body['negative_prompt'],
-                timeout=request_body['timeout']
-            )
 
-            responses.append({
-                'image': response.image,
-                'id': str(uuid.uuid4())
-            })
-        return {'data': responses}
-    except Exception as e:
-        print('Error forwarding request: ', e)
-        return {'error': "Failed to forward request to network"}
+    # use miners to add image to queue and wait for response
+    # create a uids array with length of time_to_loop made up of miners.add_image(ImageRequest(**request_body))
+    uids = []
+    errs = 0
+    for i in range(time_to_loop):
+        try:
+            image_request = ImageRequest(**request_body)
+            uid = miners.add_image(image_request)
+            print('Added image to queue', uid)
+            uids.append(uid)
+        except Exception as e:
+            # re increment i
+            i -= 1
+            errs += 1
+            if(errs > 3):
+                print(e)
+                print('The error above was from adding image to queue')
+                return {'error': 'Error adding image to queue'}, 500
+
+    async def process_uid(uid):
+        response = None
+        start_time = time.time()
+        while response is None and time.time() - start_time < 16:
+            for miner in miners.miners:
+                if uid in miner.responses and miner.responses[uid] is not None:
+                    response = miner.responses[uid]
+                    break
+            if response is not None:
+                break
+        print('Received response from local API'. response)
+        return response
+
+    async def process_uids(uids):
+        tasks = []
+        for uid in uids:
+            tasks.append(asyncio.create_task(process_uid(uid)))
+        responses = await asyncio.gather(*tasks)
+        return responses
+    
+    # Use asyncio to process uids asynchronously
+    responses = asyncio.run(process_uids(uids))
+
+    # convert responses from (uid, request, response) to {uid, image: response.image}
+    responses = [{'uid': response[0], 'image': response[2].image} for response in responses]
+    
+    if responses is not None:
+        # Do something with the responses
+        print('Received responses from API')
+        return jsonify(responses)
+
 
 
 # Start the server

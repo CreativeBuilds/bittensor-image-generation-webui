@@ -10,6 +10,7 @@
 
 # production
 /build
+__pycache__/
 
 # misc
 .DS_Store
@@ -26,3 +27,6 @@ yarn-error.log*
 /venv
 
 package-lock.json
+
+
+ips.txt

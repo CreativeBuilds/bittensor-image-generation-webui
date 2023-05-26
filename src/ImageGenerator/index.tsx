@@ -82,6 +82,7 @@ const App: React.FC = () => {
     if(!skipFadeOut)TriggerPromptInputFadeOut(setProcessing, setShowPrompt);
     else {setShowPrompt(false); setProcessing(true); }
     SubmitPrompt({ prompt, negativePrompt, ratio, image }, (data) => {
+      console.log(`Data`, data)
       imagesRef.current = data;
       Reload();
     })
