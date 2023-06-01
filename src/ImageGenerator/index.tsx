@@ -83,7 +83,10 @@ const App: React.FC = () => {
     else {setShowPrompt(false); setProcessing(true); }
     SubmitPrompt({ prompt, negativePrompt, ratio, image }, (data) => {
       console.log(`Data`, data)
-      imagesRef.current = data;
+      if(data.images){
+        imagesRef.current = data.images;
+
+      }
       Reload();
     })
   }

@@ -1,3 +1,5 @@
-flask
+flask[async]
 requests
 jsonify
+pika
+asyncio

@@ -13,7 +13,9 @@ export const SubmitPrompt = ({
   ratio: { width: number; height: number; };
   image?: string;
 
-}, callback: (data: IImageData[]) => void) => {
+}, callback: (data: {
+  images: IImageData[]
+}) => void) => {
 
   const { width, height } = ratio;
 
