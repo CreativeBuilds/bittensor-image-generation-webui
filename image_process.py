@@ -321,7 +321,6 @@ def consume_queue():
                 "uid": uid,
                 "image": image['image'],
                 "seed": image['request']['seed'],
-
             })
 
 
