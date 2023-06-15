@@ -156,6 +156,40 @@ export const updateTokenBalance = onCall(async (request) => {
     });
 });
 
+export const generateImages = onCall(async (request) => {
+
+    const prompt = request.data.prompt;
+    const negativePrompt = request.data.negativePrompt;
+    const image = request.data.image;
+    const height = request.data.height;
+    const width = request.data.width;
+    const strength = request.data.strength;
+    
+    const body = {
+        text: prompt,
+        image: image || '',
+        height: height,
+        width: width,
+        timeout: 12,
+        num_images_per_prompt: 1,
+        num_inference_steps: 30,
+        guidance_scale: 7.5,
+        strength: strength || 0.75,
+        negative_prompt: negativePrompt
+    };
+
+    return fetch('http://0.0.0.0:8093/TextToImage/Forward', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    })
+      .then(response => response.json());
+
+});
+
 
 function GenerateNewCode() {
     return Math.floor(Math.random() * 1000000) + 1000000;

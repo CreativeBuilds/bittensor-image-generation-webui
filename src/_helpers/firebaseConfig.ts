@@ -42,5 +42,12 @@ interface DecodeOneTimeCodeResponse {
   token?: string;
 }
 
+const generateImages = httpsCallable<unknown, GenerateImagesResponse>(functions, "generateImages")
+
+interface GenerateImagesResponse {
+  data: string[];
+  // # TODO didnt finish this
+}
+
 
 export {auth, app, analytics, functions, getOneTimeCode, GetOneTimeCodeResponse, decodeOneTimeCode, DecodeOneTimeCodeResponse};

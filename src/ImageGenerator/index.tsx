@@ -5,6 +5,7 @@ import { ImageDisplay } from './ImageDisplay';
 import { PromptInput } from './PromptInput';
 import { GetAspectRatio, SubmitPrompt } from '../_helpers';
 import { IImageData } from '../_helpers/SubmitPrompt';
+import { auth } from '../_helpers/firebaseConfig';
 
 export interface Option {
   label: string;
@@ -72,7 +73,7 @@ const App: React.FC = () => {
     setAspectRatio(aspectRatio);
   }
 
-  const onPromptSubmit = ({
+  const onPromptSubmit = async ({
     prompt,
     negativePrompt,
     image,
@@ -81,7 +82,15 @@ const App: React.FC = () => {
     setShowImages(false);
     if(!skipFadeOut)TriggerPromptInputFadeOut(setProcessing, setShowPrompt);
     else {setShowPrompt(false); setProcessing(true); }
-    SubmitPrompt({ prompt, negativePrompt, ratio, image }, (data) => {
+    // get firebase token
+    let token = await auth.currentUser?.getIdToken(true) || '';
+    if(!token) {
+      console.error("No token found");
+      setProcessing(false);
+      setShowPrompt(true);
+      return;
+    }
+    SubmitPrompt({ prompt, negativePrompt, ratio, image, token }, (data) => {
       console.log(`Data`, data)
       if(data.images){
         imagesRef.current = data.images;

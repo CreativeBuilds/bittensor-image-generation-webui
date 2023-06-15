@@ -5,6 +5,11 @@ import asyncio
 import threading
 import uuid
 import time
+import copy
+
+
+DEFAULT_NUM_INFERENCE_STEPS = 50
+DEFAULT_TIMEOUT = 30
 
 def load_ips():
     with open("ips.txt") as f:
@@ -65,46 +70,39 @@ class Miner():
         if(model_type != None):
             self.model_type = model_type
         # find axon within metagraph
+        if(len(mg.axons) == 0):
+            raise ValueError('No axons in metagraph')
         self.axon = [x for x in mg.axons if x.ip == ip and x.port == port][0]
         self.texttoimage = bt.text_to_image( keypair=wallet.hotkey, axon=self.axon)
         self.queue = [] # queue of images and responses to be processed (uid, ImageRequest)
         self.responses = {}  # A dictionary to store the responses
 
-    # add an image to the queue
     def add_image(self, image_request, uid=uuid.uuid4()):
-        # check image_request type
         if(type(image_request) != ImageRequest):
             # raise error
             raise TypeError('image_request must be of type ImageRequest')
         
-        # Validate that axon isn't None
         if(self.axon == None):
             # raise error
             raise ValueError('Axon is None, cannot add image to queue')
 
-        # add image_request to queue
         self.queue.append((uid, image_request))
         self.responses[uid] = None
 
-        # return uid
         return uid
 
     async def process_queue(self):
-        # get but dont pop from queue
         uid, image_request = self.queue[0]
 
-        # does uid exist on responses even if it is None?
         valid_uid = uid in self.responses
-        image_response = self.responses[uid] 
+        try:
+            image_response = self.responses[uid] 
+        except:
+            image_response = None
+            self.responses[uid] = None
 
-        bt.logging.trace("valid_uid", valid_uid)
-        
-        # check if image_response is None
         if(image_response == None):
 
-            bt.logging.trace("image_response is None")
-
-            # Call axon to process image_request
             image_response = self.texttoimage.forward(
                 text = image_request.text,
                 negative_prompt = image_request.negative_prompt,
@@ -114,30 +112,18 @@ class Miner():
                 guidance_scale = image_request.guidance_scale,
                 strength = image_request.strength,
                 num_images_per_prompt = 1,
-                num_inference_steps = 30,
-                timeout = 30
+                num_inference_steps = DEFAULT_NUM_INFERENCE_STEPS,
+                timeout = DEFAULT_TIMEOUT
             )
             
             bt.logging.trace(image_response)
-
-            # add async_image_response to responses
             self.responses[uid] = image_response
-            bt.logging.trace("got async image response")
-            bt.logging.trace(type(image_response))
 
             return None
 
         elif(valid_uid and image_response != None):
-            # check if image_response is done processing
-            # this is a coroutine, done/done() does not exist on the object
-            bt.logging.trace("image_response is not None", type(image_response))
-            
-            # check if image_response is done processing
             bt.logging.trace(image_response)
-
-            # pop from queue
             self.queue.pop(0)
-            # return image_response
             return image_response
         else:
             # return None
@@ -227,6 +213,21 @@ class Miners():
         # return response
         return miner.get_response(uid)
     
+    def remove_response(self, uid):
+        # check if uid is in uid_to_miner
+        if(uid not in self.uid_to_miner):
+            # raise error
+            raise ValueError('uid not in uid_to_miner')
+        
+        # get miner
+        miner = self.uid_to_miner[uid]
+
+        # remove response from miner
+        miner.responses.pop(uid)
+
+        # remove uid from uid_to_miner
+        self.uid_to_miner.pop(uid)
+    
     # add function for when converted to string, this object outputs list of miners and their queue size
     def __str__(self):
         return str([(str(miner), len(miner.queue)) for miner in self.miners])
@@ -235,6 +236,9 @@ class Miners():
 
 # Setup bittensor
 bt.trace()
+
+# st = bt.subtensor(chain_endpoint="test.finney.opentensor.ai:443")
+
 mg = bt.metagraph(netuid=14, network='test')
 mg.sync()
 
@@ -274,8 +278,8 @@ def consume_queue():
                 strength = request['request']['strength'],
                 seed = request['request']['seed'],
                 num_images_per_prompt = 1,
-                num_inference_steps = 30,
-                timeout = 30
+                num_inference_steps = DEFAULT_NUM_INFERENCE_STEPS,
+                timeout = DEFAULT_TIMEOUT
             )
             model_type = request['request'].get('model_type') or None
             miners.add_image(image_request, model_type=model_type, uid=request["uid"])
@@ -283,31 +287,54 @@ def consume_queue():
 
         images = {}
         # wait for response
+        cloned_requests = copy.deepcopy(requests)
         while True:
-            for request in requests:
+            for request in cloned_requests:
                 uid = request["uid"]
                 miner_response = miners.get_response(uid)
                 if(miner_response != None):
-                    bt.logging.trace("Got response from miner")
                     if(miner_response.is_success):
                         images[uid] = {
                             "image": miner_response.image,
                             "request": request["request"],
                         }
                         try:
+                            # find uid 
+                            
                             uids.remove(uid)
+                            # remove it from requests
                         except ValueError:
                             bt.logging.trace("Failed to remove uid from uids")
                             pass
+                        try:
+                            cloned_requests.remove(request)
+                        except ValueError:
+                            bt.logging.trace("Failed to remove request from cloned_requests")
+                            pass
                     else:
                         bt.logging.error("Error processing image")
-                        bt.logging.error(miner_response.error)
-                        try:
-                            uids.remove(uid)
-                        except ValueError:
-                            bt.logging.trace("Failed to remove uid from uids (error)")
-                            pass
-                        # TODO: loop back and add image to queue again
+                        bt.logging.error(miner_response)
+                        
+                        # remove response in miners
+                        miners.remove_response(uid)
+
+                        image_request = ImageRequest(
+                            text=request['request']['text'],
+                            negative_prompt=request['request']['negative_prompt'],
+                            image = request['request']['image'],
+                            width = request['request']['width'],
+                            height = request['request']['height'],
+                            guidance_scale = request['request']['guidance_scale'],
+                            strength = request['request']['strength'],
+                            seed = request['request']['seed'],
+                            num_images_per_prompt = 1,
+                            num_inference_steps = DEFAULT_NUM_INFERENCE_STEPS,
+                            timeout = DEFAULT_TIMEOUT
+                        )
+
+                        # add image back to queue
+                        miners.add_image(image_request, model_type=model_type, uid=uid)
+
             if(len(uids) == 0):
                 break
             time.sleep(0.1)
