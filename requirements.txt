@@ -3,3 +3,11 @@ requests
 jsonify
 pika
 asyncio
+Pillow
+firebase_admin
+flask_cors
+matplotlib
+webdataset
+pytorch_lightning
+torchvision
+git+https://github.com/openai/CLIP.git

@@ -42,6 +42,10 @@ export const NoBoundaryCookieTextarea = styled(CookieTextarea)`
     &:focus, &:active {
         border-bottom: 5px solid #fff;
     }
+
+  &::placeholder {
+    color: ${props => props.style.color || '#ccc'};
+  }
 `;
 const DropdownContainer = styled.div`
   position: relative;
@@ -113,6 +117,11 @@ export const ColumnFlexContainer = styled.div`
   justify-content: center;
   align-items: center;
   opacity: 1;
+
+  p {
+    margin: 0;
+    font-size: 0.75em;
+  }
 
   ${Array.from({ length: 10 }).map((_, index) => {
   const totalElements = 10;

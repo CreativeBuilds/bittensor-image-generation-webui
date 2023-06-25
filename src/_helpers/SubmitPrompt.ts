@@ -1,11 +1,11 @@
-import { GenerateImage } from './GenerateImage';
+import { GenerateImage } from './api';
 
 export interface IImageData {
   image: string;
   id: string;
 }
 
-export const SubmitPrompt = ({
+export const SubmitPrompt = async ({
   prompt, negativePrompt, ratio, image, token
 }: {
   prompt: string;
@@ -20,15 +20,10 @@ export const SubmitPrompt = ({
 
   const { width, height } = ratio;
 
-  console.log('SubmitPrompt', { prompt, negativePrompt, width, height, image });
-
-  GenerateImage({ prompt, height, width, negativePrompt, image, strength: image ? 0.75 : undefined, token })
+  return GenerateImage({ prompt, height, width, negativePrompt, image, strength: image ? 0.75 : undefined, token })
     .then(({ data, error }) => {
       if (error)
         throw new Error(error);
       callback(data);
     })
-    .catch(error => {
-      console.error(error); // Handle any errors
-    });
 };

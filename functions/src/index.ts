@@ -89,7 +89,6 @@ export const decodeOneTimeCode = onCall(async (request) => {
     // check that address is the same in firestore as originalMessage
     const ogAddress = seperatedMessage[0];
     if (ogAddress !== address) {
-        console.log(ogAddress, address, "these aren't the same", ogAddress == address);
         throw new Error("Invalid address")
     }
 
@@ -100,7 +99,6 @@ export const decodeOneTimeCode = onCall(async (request) => {
     if(!data) throw new Error("No data found");
 
     if(String(ogCode) != String(data.code)) {
-        console.log(ogCode, data.code, "these aren't the same", ogCode == data.code)
         throw new Error("Invalid code")
     }
     

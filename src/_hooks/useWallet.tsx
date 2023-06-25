@@ -39,10 +39,8 @@ const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
                 let account = await provider.send("eth_requestAccounts", []).then((accounts: string[]) => {
                     const address = ethers.getAddress(accounts[0]);
                     setAddress(address);
-                    console.log(accounts);
                     return address
                 });
-                console.log("Signed in successfully")
                 return account;
             } catch (error) {
                 console.error('Failed to connect to wallet:', error);
@@ -59,9 +57,7 @@ const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
         if (provider) {
             try {
                 // Request access to the user's accounts
-                console.log(_address, "address")
                 let signature = await provider.send("personal_sign", [_address, message]);
-                console.log("Signed message successfully")
                 return signature;
             } catch (error) {
                 console.error('Failed to sign message:', error);

@@ -30,7 +30,6 @@ const CookieInput: React.FC<CookieInputProps> = ({
   }, [cookieName, onChange]);
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
-    console.log('CookieInput handleChange', event.target.value, event);
     const newValue = event.target.value;
     onChange(newValue);
     Cookies.set(cookieName, newValue, { expires: 365 }); // Cookie expires in 1 year

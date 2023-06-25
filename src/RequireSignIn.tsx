@@ -1,8 +1,9 @@
 import React, { useEffect } from 'react';
-import { auth, decodeOneTimeCode, getOneTimeCode } from './_helpers/firebaseConfig';
-import { TwitterAuthProvider, signInWithCustomToken, signInWithPopup } from 'firebase/auth';
+import { analytics, auth, decodeOneTimeCode, getOneTimeCode } from './_helpers/firebaseConfig';
+import { TwitterAuthProvider, signInAnonymously, signInWithCustomToken, signInWithPopup } from 'firebase/auth';
 import styled from 'styled-components';
 import { useWallet } from './_hooks/useWallet';
+import { logEvent } from 'firebase/analytics';
 
 const CenterDiv = styled.div`
   display: flex;
@@ -47,8 +48,13 @@ const StylizedA = styled.a`
   }
   `;
 
-const REQUIRES_METAMASK = true;
+const REQUIRES_METAMASK = false;
 
+const ATheme = {
+  colors: {
+    text: '#ffffff'
+  }
+};
 export const RequireSignIn: React.FC<{ OnceSignedIn: React.FC; }> = ({ OnceSignedIn }) => {
   // get firebase auth state and store in variable
   const [user, setUser] = React.useState<any>(null);
@@ -78,6 +84,9 @@ export const RequireSignIn: React.FC<{ OnceSignedIn: React.FC; }> = ({ OnceSigne
         });
       } else {
         setUser(null);
+        // sign in anonymously
+        // setAnonUser(true);
+        signInAnonymously(auth)
       }
     });
 
@@ -101,13 +110,21 @@ export const RequireSignIn: React.FC<{ OnceSignedIn: React.FC; }> = ({ OnceSigne
         <>
           <h1 style={{
             marginBottom: '1.25em'
-          }}>TAO Image Generator</h1>
+          }}>TAO Image Generator <span style={{
+            fontSize:"0.6em"
+          }}>(alpha)</span></h1>
           <StylizedButton onClick={twitterSignIn} theme={{
             colors: {
               primary: '#1DA1F2',
               text: '#ffffff'
             }
           }}>login with Twitter</StylizedButton>
+           <p style={{fontSize: '0.8em'}}>Made with 💙 by <StylizedA href={'https://twitter.com/CreativeBuilds'} target="_blank" theme={ATheme} onClick={
+            (e) => {
+              logEvent(analytics, 'twitter_link_click')
+            }
+           }>CreativeBuilds</StylizedA></p>
+          <p style={{fontSize: '0.7em'}}>(yes the login page is ugly, UI update soon™)</p>
         </>
       )}
       {user && showMetamaskButton && !hasSetAddress ? noMetamask ? (
@@ -117,11 +134,7 @@ export const RequireSignIn: React.FC<{ OnceSignedIn: React.FC; }> = ({ OnceSigne
           }}>Step 2 - Install Metamask</h2>
           <p style={{
             color: '#ffffffcc'
-          }}>You must have a web3 wallet installed like <StylizedA href="https://chrome.google.com/webstore/detail/metamask/ nkbihfbeogaeaoehlefnkodbefgpgknn" target="_blank" theme={{
-            colors: {
-              text: '#ffffff'
-            }
-          }}>MetaMask</StylizedA>.</p>
+          }}>You must have a web3 wallet installed like <StylizedA href="https://chrome.google.com/webstore/detail/metamask/nkbihfbeogaeaoehlefnkodbefgpgknn" target="_blank" theme={ATheme}>MetaMask</StylizedA>.</p>
         </>
 
       ) : (
@@ -149,7 +162,6 @@ export const RequireSignIn: React.FC<{ OnceSignedIn: React.FC; }> = ({ OnceSigne
                   const token = verifyResponse.data.token;
                   // firebase sign in with token
                   return signInWithCustomToken(auth, token).then((userCredential) => {
-                    console.log("Signed in with custom token!", userCredential);
                     window.location.reload();
                   });
                 }
@@ -174,8 +186,6 @@ const twitterSignIn = () => {
   signInWithPopup(auth, provider)
     .then((result) => {
       // Handle successful sign-in here
-      console.log('Signed in with Twitter');
-      console.log(result.user);
     })
     .catch((error) => {
       // Handle error here

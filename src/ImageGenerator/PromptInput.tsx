@@ -30,10 +30,10 @@ export function PromptInput({ aspectRatio: _ar, hideAspectRatio: _har, processin
   const [prompt, setPrompt] = useState<string>('');
   const [negativePrompt, setNegativePrompt] = useState<string>('');
   const [aspectRatio, setAspectRatio] = useState<string>(_ar || "1:1");
+  const [showMore, setShowMore] = useState<boolean>(false);
 
   
   useEffect(() => {
-    console.log("PromptInput: aspectRatio: " + _ar);
     setAspectRatio(_ar || "1:1");
     onAspectRatioChanged(_ar || "1:1");
   }, [_ar]);
@@ -103,5 +103,16 @@ export function PromptInput({ aspectRatio: _ar, hideAspectRatio: _har, processin
         }
       }
     }}>[ generate ]</GoButton>
+    <br/>
+    <GoButton onClick={
+      () => setShowMore(!showMore)
+    }>{showMore ? "[ hide ]" : "[ show more ]"}</GoButton>
+    {showMore ? <>
+      <p style={{marginBottom:"0.5em"}}><b>LoRAs</b><br/> {"add_detail detailed_eye"}</p>
+    <p><b>prompt example usage</b><br/> {"<lora:add_detail:0.8> <lora:detailed_eye:1.0>"}</p>
+    <br/>
+    <p style={{marginBottom:"0.5em"}}><b>Inversions</b><br/> bad_prompt_version2 emb_params NG_DeepNegative_V1_T75 veryBadImageNegative_V1.3</p>
+    <p><b>negative prompt example usage</b><br/> {"<bad_prompt_version2:0.8> <emb_params:0.5>"}</p></> : null}
+    
   </ColumnFlexContainer>;
 }

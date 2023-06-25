@@ -19,7 +19,6 @@ export const AspectRatioDropdown: React.FC<AspectRatioDropdownProps> = ({ option
   useEffect(() => {
     const savedValue = Cookies.get(cookieName);
     const value = options.find((option) => option.value === savedValue);
-    console.log("use effect", value, savedValue, cookieName);
     if (value) {
       setSelectedOption(value);
     } else {
@@ -32,7 +31,6 @@ export const AspectRatioDropdown: React.FC<AspectRatioDropdownProps> = ({ option
     if (Date.now() - lastOpened < 350) {
       return;
     }
-    console.log("toggle dropdown", lastOpened);
     setIsOpen(!isOpen);
     setLastOpened(Date.now());
   };
@@ -40,7 +38,6 @@ export const AspectRatioDropdown: React.FC<AspectRatioDropdownProps> = ({ option
   const handleSelect = (option: Option) => {
     setSelectedOption(option);
     onSelect(option);
-    console.log("handle select");
     setIsOpen(false);
     setLastOpened(Date.now());
   };
@@ -55,7 +52,6 @@ export const AspectRatioDropdown: React.FC<AspectRatioDropdownProps> = ({ option
   close.current = () => {
     setIsOpen(false);
     setLastOpened(Date.now());
-    console.log("close current");
   };
 
   const HandleArrowSelect = (key: React.KeyboardEvent<HTMLButtonElement>) => {
@@ -99,7 +95,6 @@ export const AspectRatioDropdown: React.FC<AspectRatioDropdownProps> = ({ option
           }} onClick={() => {
             setIsOpen(false);
             setLastOpened(Date.now());
-            console.log("close current");
           }}></div>
           <DropdownList>
             {options.map((option, i) => (

@@ -67,7 +67,6 @@ export function ImageDisplay({
   }} aspectRatio={aspectRatio} hideAspectRatio={true} onPromptSubmit={x => {
     setProcessing(true);
     setTimeout(() => {
-      console.log(selectedImageIndex)
       onPromptSubmit({...x, image: selectedImageIndex !== null ? images[selectedImageIndex].image : undefined});
     }, 1500);
   }} onAspectRatioChanged={() => {}} processing={processing} />

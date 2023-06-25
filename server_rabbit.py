@@ -1,4 +1,6 @@
 from flask import Flask, request, send_from_directory
+# pip install flask-cors
+from flask_cors import CORS
 import os
 import bittensor as bt
 import uuid
@@ -10,6 +12,8 @@ import base64
 import io
 from PIL import Image
 import hashlib
+import datetime
+import time
 
 
 import firebase_admin
@@ -18,6 +22,9 @@ from firebase_admin import credentials
 from firebase_admin import firestore
 from firebase_admin import auth
 from firebase_admin import storage
+from waitress import serve
+import requests
+
 
 cred = credentials.Certificate("firebase-pkey.json")
 firebase_admin.initialize_app(cred, {
@@ -77,6 +84,8 @@ DEFAULT_INFERENCE_STEPS = 90
 # auth values
 DEFAULT_MINIMUM_WTAO_BALANCE = 0
 NEEDS_AUTHENTICATION = True
+NEEDS_METAMASK_VERIFICATION = False
+SAVE_IMAGES = True
 
 # parser.add_argument('--port', type=int, default=DEFAULT_PORT, help='Port number (default: {})'.format(DEFAULT_PORT))
 # parser.add_argument('--axon.ip', type=str, default=DEFAULT_AXON_IP, help='Axon IP address (default: {})'.format(DEFAULT_AXON_IP))
@@ -98,13 +107,100 @@ wallet = bt.wallet().create_if_non_existent()
 ips = load_ips()     
 response_dict = {}
 response_events = {}
+active_users = {}
 
-def create_app(is_local=False):
+measurement_id = "G-033RPYKJ8J"
+
+def firebase_log_event_for_cid(event, cid, params):
+
+    user_id = cid
+
+    query_params = {
+        'v': 2,
+        'tid': measurement_id,
+        '_dbg': 1,
+        'uid': user_id,
+        'dr': "https://tao.studio",
+        'source': "https://tao.studio",
+        'en': event,
+        'ep': params,
+    }
+
+    query_string = "&".join([f"{key}={value}" for key, value in query_params.items()])
+
+    url = f"https://www.google-analytics.com/g/collect?{query_string}"
+    headers = {
+        'accept': '*/*',
+        'accept-encoding': 'gzip, deflate, br',
+        'accept-language': 'en-US,en;q=0.9',
+        'cache-control': 'no-cache',
+        'content-length': '0',
+        'Content-Type': 'text/plain;charset=UTF-8',
+        'origin': 'http://localhost:3000',
+        'pragma': 'no-cache',
+        'sec-fetch-dest': 'empty',
+        'sec-fetch-mode': 'no-cors',
+        'sec-fetch-site': 'cross-site',
+        'user-agent': 'dummy',
+    }
+
+    response = requests.post(url, headers=headers)
+    if response.status_code == 204:
+        print('Event sent successfully')
+    elif response.status_code == 200:
+        print('Event sent successfully')
+    else:
+        print('Failed to send event:', response.text)
+
+    return response
+
+
+
+def CheckAuthentication(request_body):
+     # extract out user token from request body
+    print("Checking authentication", request_body)
+    try:
+        user_token = request_body['user_token']
+    except:
+        return {"error": "User not authenticated"}, 400
+
+    decoded_token = auth.verify_id_token(user_token)
+
+    # remove user token from request body
+    del request_body['user_token']
+
+    user_id = decoded_token['uid']
+    print(decoded_token)
+
+    # check if user is allowed to use the API
+    try:
+        balance = 0
+        # balance = float(decoded_token['balance'])
+    except:
+        return {"error": "User has not authenticated their metamask"}, 400
+    
+    if balance < DEFAULT_MINIMUM_WTAO_BALANCE:
+        needed = DEFAULT_MINIMUM_WTAO_BALANCE - balance
+        return {"error": f"User has insufficient wTAO balance, minimum needed: {DEFAULT_MINIMUM_WTAO_BALANCE} balance: {balance} needed: {needed}"}, 400
+    return {"success": "User authenticated", "token": user_token, "decoded_token": decoded_token, "user_id": user_id}
+
+bt.trace()
+
+def datetime_to_ms(dt):
+    epoch = datetime.datetime.utcfromtimestamp(0)  # UTC datetime for the epoch
+    delta = dt - epoch  # Time difference between dt and the epoch
+    ms = int(delta.total_seconds() * 1000)  # Convert to milliseconds
+    return ms
+
+def create_app(is_local):
     # if local serve static folder
+    is_local = True
     if is_local:
         app = Flask(__name__, static_folder='build', static_url_path='/')
     else:
         app = Flask(__name__)
+
+    CORS(app)
 
     if is_local:
         # Serve the ./build folder
@@ -116,37 +212,27 @@ def create_app(is_local=False):
             else:
                 return send_from_directory('build', 'index.html')
 
-
     # API endpoint to forward the request to the local API
     @app.route('/TextToImage/Forward', methods=['POST'])
     def forward_request():
-        time_to_loop = 4
+        bt.logging.trace("Inside forward request")
+        time_to_loop = 8
         request_body = {**request.json, 'num_images_per_prompt': 1}
-        if NEEDS_AUTHENTICATION:
-            # extract out user token from request body
-            try:
-                user_token = request_body['user_token']
-            except:
-                return {"error": "User not authenticated"}, 400
-
-            decoded_token = auth.verify_id_token(user_token)
-
-            # remove user token from request body
-            del request_body['user_token']
-
-            user_id = decoded_token['uid']
-            print(decoded_token)
-
-            # check if user is allowed to use the API
-            try:
-                balance = float(decoded_token['balance'])
-            except:
-                return {"error": "User has not authenticated their metamask"}, 400
-            
-            if balance < DEFAULT_MINIMUM_WTAO_BALANCE:
-                needed = DEFAULT_MINIMUM_WTAO_BALANCE - balance
-                return {"error": f"User has insufficient wTAO balance, minimum needed: {DEFAULT_MINIMUM_WTAO_BALANCE} balance: {balance} needed: {needed}"}, 400
         
+        if NEEDS_AUTHENTICATION:
+                response = CheckAuthentication(request.json)
+                user_id = response['user_id']
+                if NEEDS_METAMASK_VERIFICATION:
+                    balance = float(response['decoded_token']['balance'])
+                else:
+                    balance = 0
+                if 'error' in response:
+                    return response, 400
+
+        # check to see if user is already in queue
+        # if user is in queue, return error
+        if (active_users.get(user_id) != None):
+            return {"error": "User already in queue"}, 400
 
         print('Forwarding request to local API...')
         def random_seed(min,max):
@@ -171,7 +257,9 @@ def create_app(is_local=False):
                 image = request_body['image']
                 parent_image_url = ""
                 parent_image_hash = ""
-                if(image != ""):
+                # current time since epoch in milliseconds
+                current_time = int(time.time() * 1000)
+                if(image != "" and SAVE_IMAGES):
                     # ensure image provided is valid
                     try:
                         verify_base64_image(image)
@@ -192,7 +280,7 @@ def create_app(is_local=False):
                             image_bytes = io.BytesIO(decoded_image)
                             img = Image.open(image_bytes)
                             # save img to ./images folder
-                            img.save(f"/home/creativebuilds/Projects/image-generation-webui/images/{image_name}", format="JPEG")
+                            # img.save(f"/home/creativebuilds/Projects/image-generation-webui/images/{image_name}", format="JPEG")
                             # save image to firebase storage
                             with io.BytesIO() as output:
                                 img.save(output, format='JPEG')
@@ -210,7 +298,8 @@ def create_app(is_local=False):
                     except Exception as e:
                         print(e)
                         return {"error": "Invalid image provided"}, 400
-
+                elif(image != "" and not SAVE_IMAGES):
+                    bt.logging.trace(f"Image provided but SAVE_IMAGES is set to False (skipping upload)")
                 doc_data = {
                     u'uid': user_id,
                     u'prompt': request_body['text'],
@@ -222,9 +311,11 @@ def create_app(is_local=False):
                     u'seed': seed,
                     u'children_image_hashes': [],
                     u'children_image_urls': [],
+                    u'date': int(time.time() * 1000)
                 }
                 bt.logging.trace(f"Added request to firestore with correlation_id: {correlation_id}")
 
+        active_users[user_id] = (datetime.datetime.now(), correlation_id)
 
         for i in range(time_to_loop):
             requests.append({
@@ -302,11 +393,14 @@ def create_app(is_local=False):
         # Close thread
         consume_thread.join()
 
+        # Remove user from dict
+        del active_users[user_id]
+
           # Get the response from the dictionary
         response = response_dict[correlation_id]
 
         try:
-            if doc_data:
+            if doc_data and SAVE_IMAGES:
                 for img_info in response['images']:
                     decoded_image = base64.b64decode(img_info['image'])
                     image_hash = hashlib.sha256(decoded_image).hexdigest()
@@ -347,6 +441,8 @@ def create_app(is_local=False):
                         })
 
                     doc_data['children_image_urls'].append(image_url)
+            elif doc_data and not SAVE_IMAGES:
+                bt.logging.trace(f"SAVE_IMAGES is set to False (skipping upload)")
         except Exception as e:
             print(e)
 
@@ -364,6 +460,26 @@ def create_app(is_local=False):
         # Close the RabbitMQ connection
         connection.close()
 
+        parent_image_hash = ""
+        if image != "":
+            verify_base64_image(image)
+            decoded_image = base64.b64decode(image)
+            parent_image_hash = hashlib.sha256(decoded_image).hexdigest()
+
+
+        event = 'image_generation'
+        cid = user_id # 'your_client_id' 
+        params = {
+            'negative_prompt': request_body['negative_prompt'],
+            'prompt': request_body['text'],
+            'seed': seed,
+            'image_hash': parent_image_hash,
+            'width': request_body['width'],
+            'height': request_body['height'],
+        }   
+
+        # firebase_log_event_for_cid(event, cid, params)
+
         # Return the response as JSON
         return {"data": response}
         
@@ -373,14 +489,16 @@ def create_app(is_local=False):
 # Global dictionary variable
 ips = load_ips()
 
+# app = create_app(False)
 
 if __name__ == '__main__':
     # Start Flask thread
-    print("Hello world")
-    app = create_app(True)
-    bt.logging.trace("Starting Flask thread")
+    app = create_app(False)
+    # bt.logging.trace("Starting Flask thread")
+    print("Starting server")
 
-    flask_thread = threading.Thread(target=app.run, kwargs={'host':'0.0.0.0', 'port': 8093})
-    flask_thread.start()
+    # flask_thread = threading.Thread(target=app.run, kwargs={'host':'0.0.0.0', 'port': 8093})
+    # flask_thread.start()
+    serve(app, host='0.0.0.0', port=8093)
 
     # Wait for Flask thread to complete (optional)

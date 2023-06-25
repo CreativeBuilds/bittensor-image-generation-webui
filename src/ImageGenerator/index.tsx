@@ -59,7 +59,6 @@ const App: React.FC = () => {
 
   
   function Reload() {
-    console.log("Reload called")
     setLastUpdateImages(Date.now());
   }
   
@@ -91,12 +90,15 @@ const App: React.FC = () => {
       return;
     }
     SubmitPrompt({ prompt, negativePrompt, ratio, image, token }, (data) => {
-      console.log(`Data`, data)
       if(data.images){
         imagesRef.current = data.images;
 
       }
       Reload();
+    }).catch((err) => {
+      console.error(err);
+      setProcessing(false);
+      setShowPrompt(true);
     })
   }
 
