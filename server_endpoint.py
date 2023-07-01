@@ -26,8 +26,6 @@ from firebase_admin import storage
 from waitress import serve
 import requests
 
-from inference import predict_pil
-
 DEFAULT_PORT = 8093
 DEFAULT_AXON_IP = "127.0.0.1"
 DEFAULT_AXON_PORT = 9090
@@ -35,6 +33,7 @@ DEFAULT_RESPONSE_TIMEOUT = 60
 DEFAULT_INFERENCE_STEPS = 90
 
 FORWARD_TO_IP = "127.0.0.1:8095"
+IMAGE_SCORER_IP = "127.0.0.1:8089"
 
 # auth values
 DEFAULT_MINIMUM_WTAO_BALANCE = 0
@@ -249,6 +248,11 @@ def create_app(is_local):
             response = response.json()
 
             all_images = response['data']['images']
+
+            # send to scorer ip
+            score_response = requests.post("http://" + IMAGE_SCORER_IP + "/TextToImage/Score", json={"request": request_body, "response": response})
+            all_images = score_response.json()['data']['images']
+            response['data']['images'] = all_images
 
             try:
                 if doc_data and SAVE_IMAGES:

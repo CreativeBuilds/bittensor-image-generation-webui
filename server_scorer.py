@@ -129,19 +129,16 @@ def create_app():
     CORS(app)
 
     # API endpoint to forward the request to the local API
-    @app.route('/TextToImage/Forward', methods=['POST'])
+    @app.route('/TextToImage/Score', methods=['POST'])
     def forward_request():  
 
-        request_body = {**request.json, 'num_images_per_prompt': 1}
+        request_body = request.get_json()['request']
 
         user_id = request_body['user_id']
 
         try:
-            response = request.json
-
-            print("trying to get images from response")
+            response = request.get_json()['response']
             all_images = response['data']['images']
-            print('got all images', type(all_images))
 
             if len(all_images) > 4:
                 print("more than 4 images!")
@@ -159,7 +156,7 @@ def create_app():
                 image_score_pair_blocked = [pair for pair in image_score_pair if pair[1] < 4.61]
                 # get percentage of images that were blocked
                 percentage_blocked = len(image_score_pair_blocked) / len(image_score_pair)
-                print(f"percentage blocked: {percentage_blocked}")
+                bt.logging.trace(f"percentage blocked: {percentage_blocked}")
                 # if more than 50% of images were blocked, return error
                 if percentage_blocked > 0.85:
                     add_prompt_to_blocked(user_id, request_body['text'], request_body['negative_prompt'], percentage_blocked)
