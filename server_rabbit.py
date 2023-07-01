@@ -11,25 +11,12 @@ import json
 import base64
 import io
 from PIL import Image
-import hashlib
 import datetime
-import time
 
-
-import firebase_admin
-
-from firebase_admin import credentials
-from firebase_admin import firestore
-from firebase_admin import auth
-from firebase_admin import storage
 from waitress import serve
-import requests
 
 
-cred = credentials.Certificate("firebase-pkey.json")
-firebase_admin.initialize_app(cred, {
-    'storageBucket': 'image-gen-webui.appspot.com'
-})
+
 
 bt.trace()
 
@@ -75,7 +62,7 @@ def verify_base64_image(base64_string):
 
 # parser = argparse.ArgumentParser()
 
-DEFAULT_PORT = 8093
+DEFAULT_PORT = 8094
 DEFAULT_AXON_IP = "127.0.0.1"
 DEFAULT_AXON_PORT = 9090
 DEFAULT_RESPONSE_TIMEOUT = 60
@@ -107,83 +94,6 @@ wallet = bt.wallet().create_if_non_existent()
 ips = load_ips()     
 response_dict = {}
 response_events = {}
-active_users = {}
-
-measurement_id = "G-033RPYKJ8J"
-
-def firebase_log_event_for_cid(event, cid, params):
-
-    user_id = cid
-
-    query_params = {
-        'v': 2,
-        'tid': measurement_id,
-        '_dbg': 1,
-        'uid': user_id,
-        'dr': "https://tao.studio",
-        'source': "https://tao.studio",
-        'en': event,
-        'ep': params,
-    }
-
-    query_string = "&".join([f"{key}={value}" for key, value in query_params.items()])
-
-    url = f"https://www.google-analytics.com/g/collect?{query_string}"
-    headers = {
-        'accept': '*/*',
-        'accept-encoding': 'gzip, deflate, br',
-        'accept-language': 'en-US,en;q=0.9',
-        'cache-control': 'no-cache',
-        'content-length': '0',
-        'Content-Type': 'text/plain;charset=UTF-8',
-        'origin': 'http://localhost:3000',
-        'pragma': 'no-cache',
-        'sec-fetch-dest': 'empty',
-        'sec-fetch-mode': 'no-cors',
-        'sec-fetch-site': 'cross-site',
-        'user-agent': 'dummy',
-    }
-
-    response = requests.post(url, headers=headers)
-    if response.status_code == 204:
-        print('Event sent successfully')
-    elif response.status_code == 200:
-        print('Event sent successfully')
-    else:
-        print('Failed to send event:', response.text)
-
-    return response
-
-
-
-def CheckAuthentication(request_body):
-     # extract out user token from request body
-    print("Checking authentication", request_body)
-    try:
-        user_token = request_body['user_token']
-    except:
-        return {"error": "User not authenticated"}, 400
-
-    decoded_token = auth.verify_id_token(user_token)
-
-    # remove user token from request body
-    del request_body['user_token']
-
-    user_id = decoded_token['uid']
-    print(decoded_token)
-
-    # check if user is allowed to use the API
-    try:
-        balance = 0
-        # balance = float(decoded_token['balance'])
-    except:
-        return {"error": "User has not authenticated their metamask"}, 400
-    
-    if balance < DEFAULT_MINIMUM_WTAO_BALANCE:
-        needed = DEFAULT_MINIMUM_WTAO_BALANCE - balance
-        return {"error": f"User has insufficient wTAO balance, minimum needed: {DEFAULT_MINIMUM_WTAO_BALANCE} balance: {balance} needed: {needed}"}, 400
-    return {"success": "User authenticated", "token": user_token, "decoded_token": decoded_token, "user_id": user_id}
-
 bt.trace()
 
 def datetime_to_ms(dt):
@@ -216,106 +126,35 @@ def create_app(is_local):
     @app.route('/TextToImage/Forward', methods=['POST'])
     def forward_request():
         bt.logging.trace("Inside forward request")
-        time_to_loop = 8
         request_body = {**request.json, 'num_images_per_prompt': 1}
+        try:    
+            correlation_id = request_body['correlation_id']
+            del request_body['correlation_id']
+        except:
+            correlation_id = str(uuid.uuid4())
+
+
+        try:    
+            time_to_loop = request_body['time_to_loop']
+            del request_body['time_to_loop']
+        except:
+            time_to_loop = 4
+
+        try:    
+            seed = request_body['seed']
+            del request_body['seed']
+        except:
+            seed = random.randint(0, 1000000000)
         
-        if NEEDS_AUTHENTICATION:
-                response = CheckAuthentication(request.json)
-                user_id = response['user_id']
-                if NEEDS_METAMASK_VERIFICATION:
-                    balance = float(response['decoded_token']['balance'])
-                else:
-                    balance = 0
-                if 'error' in response:
-                    return response, 400
-
-        # check to see if user is already in queue
-        # if user is in queue, return error
-        if (active_users.get(user_id) != None):
-            return {"error": "User already in queue"}, 400
-
         print('Forwarding request to local API...')
-        def random_seed(min,max):
-            return random.randint(min,max)
-
+        
         # use miners to add image to queue and wait for response
         # create a uids array with length of time_to_loop made up of miners.add_image(ImageRequest(**request_body))
         requests = []
-        seed = random_seed(0, 1000000000)
 
         # Create a correlation ID to match requests with responses
-        correlation_id = str(uuid.uuid4())
-        doc_data = None
 
-        if NEEDS_AUTHENTICATION:
-            # add request to firestore under generations collection
-            db = firestore.client()
-            doc_ref = db.collection(u'generations').document(correlation_id)
-            image_url = ""
-            # if image in request body, upload to firebase storage
-            if 'image' in request_body:
-                image = request_body['image']
-                parent_image_url = ""
-                parent_image_hash = ""
-                # current time since epoch in milliseconds
-                current_time = int(time.time() * 1000)
-                if(image != "" and SAVE_IMAGES):
-                    # ensure image provided is valid
-                    try:
-                        verify_base64_image(image)
-                        decoded_image = base64.b64decode(image)
-                        parent_image_hash = hashlib.sha256(decoded_image).hexdigest()
-
-                        # see if image already exists in storage
-                        image_doc_ref = db.collection(u'images').document(parent_image_hash)
-                        image_doc_snapshot = image_doc_ref.get()
-                        exists = image_doc_snapshot.exists
-                        if exists:
-                            # image already exists, use existing url
-                            image_url = image_doc_snapshot.get('url')
-                        else:
-                            image_name = str(parent_image_hash) + ".png"
-                            bucket = storage.bucket()
-                            blob = bucket.blob(image_name)
-                            image_bytes = io.BytesIO(decoded_image)
-                            img = Image.open(image_bytes)
-                            # save img to ./images folder
-                            # img.save(f"/home/creativebuilds/Projects/image-generation-webui/images/{image_name}", format="JPEG")
-                            # save image to firebase storage
-                            with io.BytesIO() as output:
-                                img.save(output, format='JPEG')
-                                blob.upload_from_string(output.getvalue(), content_type='image/jpeg')
-    
-                            parent_image_url = blob.public_url
-                            bt.logging.trace(f"Uploaded image to firebase storage with url: {parent_image_url}")
-                            request_body['image_url'] = parent_image_url
-                            image_doc_ref = db.collection(u'images').document(parent_image_hash)
-                            image_doc_ref.set({
-                                u'uploader': user_id,
-                                u'url': parent_image_url,
-                                u'hash': parent_image_hash,
-                            })
-                    except Exception as e:
-                        print(e)
-                        return {"error": "Invalid image provided"}, 400
-                elif(image != "" and not SAVE_IMAGES):
-                    bt.logging.trace(f"Image provided but SAVE_IMAGES is set to False (skipping upload)")
-                doc_data = {
-                    u'uid': user_id,
-                    u'prompt': request_body['text'],
-                    u'negative_prompt': request_body['negative_prompt'],
-                    u'parent_image_url': parent_image_url,
-                    u'parent_image_hash': parent_image_hash,
-                    u'num_images': time_to_loop,
-                    u'balance': balance,
-                    u'seed': seed,
-                    u'children_image_hashes': [],
-                    u'children_image_urls': [],
-                    u'date': int(time.time() * 1000)
-                }
-                bt.logging.trace(f"Added request to firestore with correlation_id: {correlation_id}")
-
-        active_users[user_id] = (datetime.datetime.now(), correlation_id)
+        
 
         for i in range(time_to_loop):
             requests.append({
@@ -393,92 +232,19 @@ def create_app(is_local):
         # Close thread
         consume_thread.join()
 
-        # Remove user from dict
-        del active_users[user_id]
+        
 
           # Get the response from the dictionary
         response = response_dict[correlation_id]
 
-        try:
-            if doc_data and SAVE_IMAGES:
-                for img_info in response['images']:
-                    decoded_image = base64.b64decode(img_info['image'])
-                    image_hash = hashlib.sha256(decoded_image).hexdigest()
-
-                    # add image to doc data
-                    doc_data['children_image_hashes'].append(image_hash)
-
-                    # see if image already exists in storage
-                    image_doc_ref = db.collection(u'images').document(image_hash)
-                    image_doc_snapshot = image_doc_ref.get()
-                    exists = image_doc_snapshot.exists
-                    if exists:
-                        # image already exists, use existing url
-                        image_url = image_doc_snapshot.get('url')
-                    else:
-                    
-                        image_name = str(image_hash) + ".png"
-                        bucket = storage.bucket()
-                        blob = bucket.blob(image_name)
-                        image_bytes = io.BytesIO(decoded_image)
-
-                        # save img to ./images folder
-                        img = Image.open(image_bytes)
-                        img.save(f"/home/creativebuilds/Projects/image-generation-webui/images/{image_name}", format="JPEG")
-
-                        # save image to firebase storage
-                        with io.BytesIO() as output:
-                            img.save(output, format='JPEG')
-                            blob.upload_from_string(output.getvalue(), content_type='image/jpeg')
-
-                        image_url = blob.public_url
-
-                        # add image to firestore
-                        image_doc_ref.set({
-                            u'uploader': user_id,
-                            u'url': image_url,
-                            u'hash': image_hash,
-                        })
-
-                    doc_data['children_image_urls'].append(image_url)
-            elif doc_data and not SAVE_IMAGES:
-                bt.logging.trace(f"SAVE_IMAGES is set to False (skipping upload)")
-        except Exception as e:
-            print(e)
-
-        # add request to firestore
-        if doc_data:
-            doc_ref = db.collection(u'requests').document(correlation_id)
-            doc_ref.set(doc_data)
-            bt.logging.trace(f"Added request to firestore with correlation_id: {correlation_id}")
+        
 
         # Clean up the event and dictionary for this request
         del response_dict[correlation_id]
         del response_events[correlation_id]
-        bt.logging.trace("Received response!")
 
         # Close the RabbitMQ connection
-        connection.close()
-
-        parent_image_hash = ""
-        if image != "":
-            verify_base64_image(image)
-            decoded_image = base64.b64decode(image)
-            parent_image_hash = hashlib.sha256(decoded_image).hexdigest()
-
-
-        event = 'image_generation'
-        cid = user_id # 'your_client_id' 
-        params = {
-            'negative_prompt': request_body['negative_prompt'],
-            'prompt': request_body['text'],
-            'seed': seed,
-            'image_hash': parent_image_hash,
-            'width': request_body['width'],
-            'height': request_body['height'],
-        }   
-
-        # firebase_log_event_for_cid(event, cid, params)
+        connection.close() 
 
         # Return the response as JSON
         return {"data": response}
@@ -499,6 +265,6 @@ if __name__ == '__main__':
 
     # flask_thread = threading.Thread(target=app.run, kwargs={'host':'0.0.0.0', 'port': 8093})
     # flask_thread.start()
-    serve(app, host='0.0.0.0', port=8093)
+    serve(app, host='0.0.0.0', port=DEFAULT_PORT)
 
     # Wait for Flask thread to complete (optional)

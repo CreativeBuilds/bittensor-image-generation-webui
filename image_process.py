@@ -6,10 +6,17 @@ import threading
 import uuid
 import time
 import copy
-
+from PIL import Image
+import base64
+import io
+from inference import predict_pil
+import heapq
+import asyncio
+import concurrent
+import hashlib
 
 DEFAULT_NUM_INFERENCE_STEPS = 50
-DEFAULT_TIMEOUT = 30
+DEFAULT_TIMEOUT = 15
 
 def load_ips():
     with open("ips.txt") as f:
@@ -51,7 +58,6 @@ class ImageRequest():
         self.timeout = timeout
     
     def __call__(self):
-        print("Calling image request", self)
         return self
 
 class Miner():
@@ -59,7 +65,7 @@ class Miner():
     ip = None
     port = None
     queue = None # queue of images and responses to be processed (uid, ImageRequest)
-    model_type = "prompthero/openjourney"
+    model_type = "openjourney-v4"
     texttoimage = None
     responses = None
 
@@ -87,7 +93,7 @@ class Miner():
             raise ValueError('Axon is None, cannot add image to queue')
 
         self.queue.append((uid, image_request))
-        self.responses[uid] = None
+        self.responses[uid] = (None, image_request)
 
         return uid
 
@@ -96,10 +102,10 @@ class Miner():
 
         valid_uid = uid in self.responses
         try:
-            image_response = self.responses[uid] 
+            image_response = self.responses[uid][0] 
         except:
             image_response = None
-            self.responses[uid] = None
+            self.responses[uid] = (None, image_request)
 
         if(image_response == None):
 
@@ -117,7 +123,7 @@ class Miner():
             )
             
             bt.logging.trace(image_response)
-            self.responses[uid] = image_response
+            self.responses[uid] = (image_response, image_request)
 
             return None
 
@@ -158,7 +164,7 @@ class Miners():
     # set up a miners object
     def __init__(self, ips):
         for ip in ips:
-            miner = Miner(ip=ip[0], port=ip[1])
+            miner = Miner(ip=ip[0], port=ip[1], model_type=ip[2])
             self.miners[miner] = []
 
     # add an image to the queue of the miner with the least images in its queue that matches the model_type if provided
@@ -211,7 +217,8 @@ class Miners():
         miner = self.uid_to_miner[uid]
 
         # return response
-        return miner.get_response(uid)
+        (response, request) = miner.get_response(uid)
+        return ((response, request), miner.model_type)
     
     def remove_response(self, uid):
         # check if uid is in uid_to_miner
@@ -291,12 +298,22 @@ def consume_queue():
         while True:
             for request in cloned_requests:
                 uid = request["uid"]
-                miner_response = miners.get_response(uid)
+                ((miner_response, miner_request), model_type) = miners.get_response(uid)
                 if(miner_response != None):
                     if(miner_response.is_success):
+                        decoded_image = base64.b64decode(miner_response.image)
+                        image_hash = hashlib.sha256(decoded_image).hexdigest()
+                        parent_image = miner_request.image
+                        if(parent_image == None or parent_image == ''):
+                            parent_hash = ''
+                        else:
+                            parent_hash = hashlib.sha256(base64.b64decode(parent_image)).hexdigest()
                         images[uid] = {
                             "image": miner_response.image,
+                            "image_hash": image_hash,
+                            "parent_hash": parent_hash,
                             "request": request["request"],
+                            "model_type": model_type,
                         }
                         try:
                             # find uid 
@@ -332,11 +349,44 @@ def consume_queue():
                             timeout = DEFAULT_TIMEOUT
                         )
 
+                        # if msg includes cannot identify image file
+                        position = -1
+                        try:
+                            position = miner_response.return_message.index("cannot identify image file")
+                        except ValueError:
+                            pass
+
+                        if (position > -1):
+                            # remove image from request
+                            image_request.image = ''
                         # add image back to queue
+                        bt.logging.trace("Adding image back to queue")
+                        # wait 0.5 seconds
+                        time.sleep(0.5)
                         miners.add_image(image_request, model_type=model_type, uid=uid)
 
             if(len(uids) == 0):
+                # process images for best 4 images
+                # scores = {}
+                # bt.logging.trace("Predicting images")
+                # for uid in images:
+                #     image = images[uid]
+                #     # base64 decode image
+                #     pil_image = Image.open(io.BytesIO(base64.b64decode(image['image'])))
+
+                #     # run in new thread
+                #     predicted_image = predict_pil(pil_image)
+                    
+                #     scores[uid] = (uid, predicted_image) 
+                #     bt.logging.trace(f"{uid}: {scores[uid][1]:.2f}")
+                # # get top 4 images
+                # top_4 = heapq.nlargest(4, scores.values(), key=lambda x: x[1])
+                # # get top 4 images
+                # for uid, score in top_4:
+                #     top_images[uid] = (images[uid], score)
                 break
+
+
             time.sleep(0.1)
 
         # Create the response
@@ -344,10 +394,16 @@ def consume_queue():
         response = []
         for uid in images:
             image = images[uid]
+            # image = top_images[uid][0]
+            # score = top_images[uid][1]
             response.append({
                 "uid": uid,
                 "image": image['image'],
+                "image_hash": image['image_hash'],
+                "parent_hash": image['parent_hash'],
                 "seed": image['request']['seed'],
+                "model_type": image['model_type'],
+                "resolution": f"{image['request']['width']}x{image['request']['height']}",
             })
 
 
@@ -373,6 +429,9 @@ def consume_queue():
         # Acknowledge the request message
         channel.basic_ack(delivery_tag=method.delivery_tag)
 
+    # create channel if doesnt exist
+    channel.queue_declare(queue='client_requests', durable=True)
+
     # Start consuming requests from the server
     channel.basic_consume(queue='client_requests', on_message_callback=process_request)
 
@@ -389,5 +448,6 @@ bt.logging.trace("Started consume thread")
 bt.logging.trace("Starting queue processing")
 while True:
     miners.process_queue()
+    time.sleep(0.5)
 
 

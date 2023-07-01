@@ -32,3 +32,4 @@ package-lock.json
 ips.txt
 firebase-pkey.json
 /images
+*.csv
