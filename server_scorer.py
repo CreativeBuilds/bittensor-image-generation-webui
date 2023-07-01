@@ -91,6 +91,12 @@ def verify_base64_image(base64_string):
 def process_string(string):
     if "," in string:
         return f"\"{string}\""
+    # remove newlines
+    string = string.replace("\n", "")
+    # remove carriage returns
+    string = string.replace("\r", "")
+    # remove tabs
+    string = string.replace("\t", "")
     return string
 
 def add_prompt_to_blocked(userid, prompt, negative_prompt, percentage_blocked):
