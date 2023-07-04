@@ -11,7 +11,7 @@ trap ctrl_c INT
 
 while true; do
     echo "Starting image_process.py..."
-    python3 image_process.py
+    python3 ../servers/endpoint/image_process.py
 
     if [ $? -eq 0 ]; then
         echo "image_process.py exited successfully."

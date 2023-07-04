@@ -11,7 +11,7 @@ trap ctrl_c INT
 
 while true; do
     echo "Starting server_rabbit.py with waitress..."
-    python3 server_rabbit.py
+    python3 ../servers/endpoint/server_rabbit.py
 
     if [ $? -eq 0 ]; then
         echo "Server_rabbit.py exited successfully."
