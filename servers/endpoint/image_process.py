@@ -6,6 +6,7 @@ import copy
 import base64
 import hashlib
 import os
+import sys
 
 from ..._utils.bittensor import bt
 from ...classes.ImageRequest import ImageRequest
@@ -186,7 +187,14 @@ def consume_queue():
     channel.basic_consume(queue='client_requests', on_message_callback=process_request)
 
     # Start consuming messages
-    channel.start_consuming()
+    try:
+        channel.start_consuming()
+    except:
+        bt.logging.error("Error consuming messages")
+        # Close the connection
+        connection.close()
+        # Exit the program
+        sys.exit(1)
 
 
 bt.logging.trace("Starting consume thread")
