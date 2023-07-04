@@ -5,10 +5,7 @@ from flask import Flask, request, send_from_directory
 from flask_cors import CORS
 import os
 import uuid
-import threading
 import random
-import pika
-import json
 import base64
 import io
 from PIL import Image
@@ -26,20 +23,9 @@ from firebase_admin import storage
 from waitress import serve
 import requests
 
-DEFAULT_PORT = 8093
-DEFAULT_AXON_IP = "127.0.0.1"
-DEFAULT_AXON_PORT = 9090
-DEFAULT_RESPONSE_TIMEOUT = 60
-DEFAULT_INFERENCE_STEPS = 90
+from ..._utils._DEFAULTS import *
+from ..._utils.verify_image import verify_base64_image
 
-FORWARD_TO_IP = "127.0.0.1:8095"
-IMAGE_SCORER_IP = "127.0.0.1:8089"
-
-# auth values
-DEFAULT_MINIMUM_WTAO_BALANCE = 0
-NEEDS_AUTHENTICATION = True
-NEEDS_METAMASK_VERIFICATION = False
-SAVE_IMAGES = False
 
 app = Flask(__name__, static_folder='build', static_url_path='/')
 
@@ -78,38 +64,7 @@ def CheckAuthentication(request_body):
         return {"error": f"User has insufficient wTAO balance, minimum needed: {DEFAULT_MINIMUM_WTAO_BALANCE} balance: {balance} needed: {needed}"}, 400
     return {"success": "User authenticated", "token": user_token, "decoded_token": decoded_token, "user_id": user_id}
 
-def verify_base64_image(base64_string):
-    try:
-        # Decode the base64 string
-        image_data = base64.b64decode(base64_string)
 
-        # Create a BytesIO object from the decoded image data
-        image_buffer = io.BytesIO(image_data)
-
-        # Attempt to open the image using PIL
-        img = Image.open(image_buffer)
-
-        # Check if the image can be loaded without errors
-        img.verify()
-
-        print("Valid image!")
-        return True
-
-    except (IOError, SyntaxError) as e:
-        print("Invalid image:", e)
-        return False
-
-# process strings that have , in them, safe for csv
-def process_string(string):
-    # remove newlines
-    string = string.replace("\n", "")
-    # remove carriage returns
-    string = string.replace("\r", "")
-    # remove tabs
-    string = string.replace("\t", "")
-    if "," in string:
-        return f"\"{string}\""
-    return string
 
 active_users = {}
 
@@ -244,7 +199,7 @@ def create_app(is_local):
 
 
             # forward the request to the local API
-            response = requests.post("http://" + FORWARD_TO_IP + "/TextToImage/Forward", json=request_body)
+            response = requests.post("http://" + RABBIT_ADDRESS + "/TextToImage/Forward", json=request_body)
 
             if (response.status_code != 200):
                 error_msg = response.json()['error']
@@ -260,7 +215,7 @@ def create_app(is_local):
             all_images = response['data']['images']
 
             # send to scorer ip
-            score_response = requests.post("http://" + IMAGE_SCORER_IP + "/TextToImage/Score", json={"request": request_body, "response": response})
+            score_response = requests.post("http://" + IMAGE_SCORER_ADDRESS + "/TextToImage/Score", json={"request": request_body, "response": response})
             all_images = score_response.json()['data']['images']
             response['data']['images'] = all_images
 
@@ -334,4 +289,4 @@ if __name__ == '__main__':
     app = create_app(True)
 
     # run the app
-    serve(app, host='0.0.0.0', port=DEFAULT_PORT)
+    serve(app, host='0.0.0.0', port=DEFAULT_ENDPOINT_PORT)

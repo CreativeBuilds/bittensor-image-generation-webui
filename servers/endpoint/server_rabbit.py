@@ -16,6 +16,8 @@ import datetime
 from waitress import serve
 import sys
 
+from ..._utils._DEFAULTS import DEFAULT_RABBIT_PORT
+
 
 
 bt.trace()
@@ -59,26 +61,6 @@ def verify_base64_image(base64_string):
     except (IOError, SyntaxError) as e:
         print("Invalid image:", e)
         return False
-
-# parser = argparse.ArgumentParser()
-
-DEFAULT_PORT = 8094
-DEFAULT_AXON_IP = "127.0.0.1"
-DEFAULT_AXON_PORT = 9090
-DEFAULT_RESPONSE_TIMEOUT = 60
-DEFAULT_INFERENCE_STEPS = 90
-
-# auth values
-DEFAULT_MINIMUM_WTAO_BALANCE = 0
-NEEDS_AUTHENTICATION = True
-NEEDS_METAMASK_VERIFICATION = False
-SAVE_IMAGES = True
-
-# parser.add_argument('--port', type=int, default=DEFAULT_PORT, help='Port number (default: {})'.format(DEFAULT_PORT))
-# parser.add_argument('--axon.ip', type=str, default=DEFAULT_AXON_IP, help='Axon IP address (default: {})'.format(DEFAULT_AXON_IP))
-# parser.add_argument('--axon.port', type=int, default=DEFAULT_AXON_PORT, help='Axon port number (default: {})'.format(DEFAULT_AXON_PORT))
-
-# args = vars(parser.parse_args())
 
 args = {}
 
@@ -265,11 +247,6 @@ ips = load_ips()
 if __name__ == '__main__':
     # Start Flask thread
     app = create_app(False)
-    # bt.logging.trace("Starting Flask thread")
-    print("Starting server")
+    bt.logging.trace("Starting server thread with Waitress")
 
-    # flask_thread = threading.Thread(target=app.run, kwargs={'host':'0.0.0.0', 'port': 8093})
-    # flask_thread.start()
-    serve(app, host='0.0.0.0', port=DEFAULT_PORT)
-
-    # Wait for Flask thread to complete (optional)
+    serve(app, host='0.0.0.0', port=DEFAULT_RABBIT_PORT)

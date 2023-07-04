@@ -1,91 +1,23 @@
-from flask import Flask, request, send_from_directory
+from flask import Flask, request
 # pip install flask-cors
 from flask_cors import CORS
 import os
-import uuid
-import threading
-import random
-import pika
-import json
 import base64
 import io
 from PIL import Image
-import hashlib
-import datetime
 import time
 import bittensor as bt
 
 from waitress import serve
-import requests
 
 from ...inference import predict_pil
+from ..._utils._DEFAULTS import *
 
-DEFAULT_PORT = 8095
-DEFAULT_AXON_IP = "127.0.0.1"
-DEFAULT_AXON_PORT = 9090
-DEFAULT_RESPONSE_TIMEOUT = 60
-DEFAULT_INFERENCE_STEPS = 90
 
-FORWARD_TO_IP = "127.0.0.1:8094"
-
-# auth values
-DEFAULT_MINIMUM_WTAO_BALANCE = 0
-NEEDS_AUTHENTICATION = True
-NEEDS_METAMASK_VERIFICATION = False
-SAVE_IMAGES = False
 
 app = Flask(__name__, static_folder='build', static_url_path='/')
 
 CORS(app)
-
-def CheckAuthentication(request_body):
-     # extract out user token from request body
-    print("Checking authentication", request_body)
-    try:
-        user_token = request_body['user_token']
-    except:
-        return {"error": "User not authenticated"}, 400
-
-    decoded_token = auth.verify_id_token(user_token)
-
-    # remove user token from request body
-    del request_body['user_token']
-
-    user_id = decoded_token['uid']
-    print(decoded_token)
-
-    # check if user is allowed to use the API
-    try:
-        balance = 0
-        # balance = float(decoded_token['balance'])
-    except:
-        return {"error": "User has not authenticated their metamask"}, 400
-    
-    if balance < DEFAULT_MINIMUM_WTAO_BALANCE:
-        needed = DEFAULT_MINIMUM_WTAO_BALANCE - balance
-        return {"error": f"User has insufficient wTAO balance, minimum needed: {DEFAULT_MINIMUM_WTAO_BALANCE} balance: {balance} needed: {needed}"}, 400
-    return {"success": "User authenticated", "token": user_token, "decoded_token": decoded_token, "user_id": user_id}
-
-def verify_base64_image(base64_string):
-    try:
-        # Decode the base64 string
-        image_data = base64.b64decode(base64_string)
-
-        # Create a BytesIO object from the decoded image data
-        image_buffer = io.BytesIO(image_data)
-
-        # Attempt to open the image using PIL
-        img = Image.open(image_buffer)
-
-        # Check if the image can be loaded without errors
-        img.verify()
-
-        print("Valid image!")
-        return True
-
-    except (IOError, SyntaxError) as e:
-        print("Invalid image:", e)
-        return False
 
 # process strings that have , in them, safe for csv
 def process_string(string):
@@ -217,4 +149,4 @@ if __name__ == '__main__':
     app = create_app()
 
     # run the app
-    serve(app, host='0.0.0.0', port=DEFAULT_PORT)
+    serve(app, host='0.0.0.0', port=DEFAULT_IMAGE_SCORER_PORT)
