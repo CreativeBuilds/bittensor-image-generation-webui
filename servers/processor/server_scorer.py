@@ -18,7 +18,7 @@ import bittensor as bt
 from waitress import serve
 import requests
 
-from inference import predict_pil
+from ...inference import predict_pil
 
 DEFAULT_PORT = 8095
 DEFAULT_AXON_IP = "127.0.0.1"
