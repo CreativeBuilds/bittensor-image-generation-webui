@@ -33,3 +33,5 @@ ips.txt
 firebase-pkey.json
 /images
 *.csv
+
+.firebase/
