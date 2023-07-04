@@ -89,14 +89,16 @@ def verify_base64_image(base64_string):
 
 # process strings that have , in them, safe for csv
 def process_string(string):
-    if "," in string:
-        return f"\"{string}\""
+    
     # remove newlines
     string = string.replace("\n", "")
     # remove carriage returns
     string = string.replace("\r", "")
     # remove tabs
     string = string.replace("\t", "")
+
+    if "," in string:
+        return f"\"{string}\""
     return string
 
 def add_prompt_to_blocked(userid, prompt, negative_prompt, percentage_blocked):
@@ -113,7 +115,7 @@ def add_prompt_to_blocked(userid, prompt, negative_prompt, percentage_blocked):
         timestamp_in_milliseconds = int(round(time.time() * 1000))
         f.write(f"{timestamp_in_milliseconds},{userid},{percentage_blocked},{process_string(prompt)},{process_string(negative_prompt)}\n")
 
-def add_prompt_to_passed(userid, prompt, negative_prompt, resolution, average_score, top_4_scores, top_4_seeds, percentage_blocked,image_hashes,parent_hashes ):
+def add_prompt_to_passed(userid, prompt, negative_prompt, resolution, average_score, top_4_models, top_4_scores, top_4_seeds, percentage_blocked,image_hashes,parent_hashes ):
     # make file name if it doesn't exist
     # create directory for outputs under ./outputs
     filename = "passed.csv"
@@ -122,10 +124,10 @@ def add_prompt_to_passed(userid, prompt, negative_prompt, resolution, average_sc
     filename = f"outputs/{filename}"
     if not os.path.exists(filename):
         with open(filename, 'w') as f:
-            f.write("timestamp,userid,average_score,top_4_scores,top_4_seeds,image_hashes,parent_hashes,percentage_blocked,prompt,negative_prompt,resolution\n")
+            f.write("timestamp,userid,average_score,top_4_models,top_4_scores,top_4_seeds,image_hashes,parent_hashes,percentage_blocked,prompt,negative_prompt,resolution\n")
     with open(filename, 'a') as f:
         timestamp_in_milliseconds = int(round(time.time() * 1000))
-        f.write(f"{timestamp_in_milliseconds},{userid},{average_score},{process_string(str(top_4_scores))},{process_string(str(top_4_seeds))},{process_string(str(image_hashes))},{process_string(str(parent_hashes))},{percentage_blocked},{process_string(prompt)},{process_string(negative_prompt)},{resolution}\n")
+        f.write(f"{timestamp_in_milliseconds},{userid},{average_score},{process_string(str(top_4_models))},{process_string(str(top_4_scores))},{process_string(str(top_4_seeds))},{process_string(str(image_hashes))},{process_string(str(parent_hashes))},{percentage_blocked},{process_string(prompt)},{process_string(negative_prompt)},{resolution}\n")
 
 active_users = {}
 
@@ -185,8 +187,9 @@ def create_app():
                 parent_hashes = [hash for hash in parent_hashes if hash]
                 # deduplicate hashes
                 parent_hashes_dedupe = list(set(parent_hashes))
+                models = [pair[0]['model_type'] for pair in image_score_pair[:4]]
 
-                add_prompt_to_passed(user_id, request_body['text'], request_body['negative_prompt'], resolution, avg_image_scores, top_4_images_scores, top_4_image_seeds, percentage_blocked,image_hashes, parent_hashes_dedupe if len(parent_hashes_dedupe) == 1 else parent_hashes)
+                add_prompt_to_passed(user_id, request_body['text'], request_body['negative_prompt'], resolution, avg_image_scores,models, top_4_images_scores, top_4_image_seeds, percentage_blocked,image_hashes, parent_hashes_dedupe if len(parent_hashes_dedupe) == 1 else parent_hashes)
                 # print scores
                 for pair in image_score_pair:
                     bt.logging.trace(pair[1], pair[0]['model_type'])

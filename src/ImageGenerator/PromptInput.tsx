@@ -103,7 +103,7 @@ export function PromptInput({ aspectRatio: _ar, hideAspectRatio: _har, processin
         }
       }
     }}>[ generate ]</GoButton>
-    <br/>
+    {/* <br/>
     <GoButton onClick={
       () => setShowMore(!showMore)
     }>{showMore ? "[ hide ]" : "[ show more ]"}</GoButton>
@@ -112,7 +112,7 @@ export function PromptInput({ aspectRatio: _ar, hideAspectRatio: _har, processin
     <p><b>prompt example usage</b><br/> {"<lora:add_detail:0.8> <lora:detailed_eye:1.0>"}</p>
     <br/>
     <p style={{marginBottom:"0.5em"}}><b>Inversions</b><br/> bad_prompt_version2 emb_params NG_DeepNegative_V1_T75 veryBadImageNegative_V1.3</p>
-    <p><b>negative prompt example usage</b><br/> {"<bad_prompt_version2:0.8> <emb_params:0.5>"}</p></> : null}
+    <p><b>negative prompt example usage</b><br/> {"<bad_prompt_version2:0.8> <emb_params:0.5>"}</p></> : null} */}
     
   </ColumnFlexContainer>;
 }

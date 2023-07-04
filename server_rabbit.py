@@ -14,7 +14,7 @@ from PIL import Image
 import datetime
 
 from waitress import serve
-
+import sys
 
 
 
@@ -164,27 +164,32 @@ def create_app(is_local):
                 "image": None,
             })
 
-        # Connect to RabbitMQ
-        connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
-        channel = connection.channel()
+        try:
+            # Connect to RabbitMQ
+            connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+            channel = connection.channel()
 
-         # Declare a queue for responses from clients
-        channel.queue_declare(queue=correlation_id)
+            # Declare a queue for responses from clients
+            channel.queue_declare(queue=correlation_id)
 
-        
-        # Create a new response event for this request
-        response_event = threading.Event()
-        response_events[correlation_id] = response_event
+            
+            # Create a new response event for this request
+            response_event = threading.Event()
+            response_events[correlation_id] = response_event
 
-        # Set consume flag
-        consume_flag = threading.Event()
+            # Set consume flag
+            consume_flag = threading.Event()
 
-       # Function to start consuming messages
-        def start_consuming(channel):
-            while not consume_flag.is_set():
-                channel.connection.process_data_events()
+        # Function to start consuming messages
+            def start_consuming(channel):
+                while not consume_flag.is_set():
+                    channel.connection.process_data_events()
 
-            channel.stop_consuming()
+                channel.stop_consuming()
+        except:
+            print("RabbitMQ connection failed")
+            # exit python file
+            sys.exit()
 
         # Create a correlation dictionary to store the response
         response_dict[correlation_id] = []

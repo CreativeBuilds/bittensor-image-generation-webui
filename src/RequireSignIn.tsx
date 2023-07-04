@@ -104,80 +104,81 @@ export const RequireSignIn: React.FC<{ OnceSignedIn: React.FC; }> = ({ OnceSigne
   const IS_VALID_USER = REQUIRES_METAMASK ? user && hasSetAddress : user;
 
   return IS_VALID_USER ? <OnceSignedIn /> : (
-    <CenterDiv className="App">
+    null
+    // <CenterDiv className="App">
 
-      {showTwitterButton && !user && (
-        <>
-          <h1 style={{
-            marginBottom: '1.25em'
-          }}>TAO Image Generator <span style={{
-            fontSize:"0.6em"
-          }}>(alpha)</span></h1>
-          <StylizedButton onClick={twitterSignIn} theme={{
-            colors: {
-              primary: '#1DA1F2',
-              text: '#ffffff'
-            }
-          }}>login with Twitter</StylizedButton>
-           <p style={{fontSize: '0.8em'}}>Made with 💙 by <StylizedA href={'https://twitter.com/CreativeBuilds'} target="_blank" theme={ATheme} onClick={
-            (e) => {
-              logEvent(analytics, 'twitter_link_click')
-            }
-           }>CreativeBuilds</StylizedA></p>
-          <p style={{fontSize: '0.7em'}}>(yes the login page is ugly, UI update soon™)</p>
-        </>
-      )}
-      {user && showMetamaskButton && !hasSetAddress ? noMetamask ? (
-        <>
-          <h2 style={{
-            marginBottom: '1.25em'
-          }}>Step 2 - Install Metamask</h2>
-          <p style={{
-            color: '#ffffffcc'
-          }}>You must have a web3 wallet installed like <StylizedA href="https://chrome.google.com/webstore/detail/metamask/nkbihfbeogaeaoehlefnkodbefgpgknn" target="_blank" theme={ATheme}>MetaMask</StylizedA>.</p>
-        </>
+    //   {showTwitterButton && !user && (
+    //     <>
+    //       <h1 style={{
+    //         marginBottom: '1.25em'
+    //       }}>TAO Image Generator <span style={{
+    //         fontSize:"0.6em"
+    //       }}>(alpha)</span></h1>
+    //       <StylizedButton onClick={twitterSignIn} theme={{
+    //         colors: {
+    //           primary: '#1DA1F2',
+    //           text: '#ffffff'
+    //         }
+    //       }}>login with Twitter</StylizedButton>
+    //        <p style={{fontSize: '0.8em'}}>Made with 💙 by <StylizedA href={'https://twitter.com/CreativeBuilds'} target="_blank" theme={ATheme} onClick={
+    //         (e) => {
+    //           logEvent(analytics, 'twitter_link_click')
+    //         }
+    //        }>CreativeBuilds</StylizedA></p>
+    //       <p style={{fontSize: '0.7em'}}>(yes the login page is ugly, UI update soon™)</p>
+    //     </>
+    //   )}
+    //   {user && showMetamaskButton && !hasSetAddress ? noMetamask ? (
+    //     <>
+    //       <h2 style={{
+    //         marginBottom: '1.25em'
+    //       }}>Step 2 - Install Metamask</h2>
+    //       <p style={{
+    //         color: '#ffffffcc'
+    //       }}>You must have a web3 wallet installed like <StylizedA href="https://chrome.google.com/webstore/detail/metamask/nkbihfbeogaeaoehlefnkodbefgpgknn" target="_blank" theme={ATheme}>MetaMask</StylizedA>.</p>
+    //     </>
 
-      ) : (
-        <>
-          <h2 style={{
-            marginBottom: '1.25em'
-          }}>Step 2 - Link Metamask</h2>
-          <StylizedButton theme={{
-            colors: {
-              primary: '#E8831D',
-              text: '#ffffff'
-            }
-          }} onClick={() => {
-            // #TODO trigger function to create one time code to sign
-            setMetamaskOpen(true);
-            signIn().then((address) => {
-              return getOneTimeCode({ address }).then((async (response) => {
-                const code = response.data.code;
-                const message = `${address} your one time code is: ${code}`;
+    //   ) : (
+    //     <>
+    //       <h2 style={{
+    //         marginBottom: '1.25em'
+    //       }}>Step 2 - Link Metamask</h2>
+    //       <StylizedButton theme={{
+    //         colors: {
+    //           primary: '#E8831D',
+    //           text: '#ffffff'
+    //         }
+    //       }} onClick={() => {
+    //         // #TODO trigger function to create one time code to sign
+    //         setMetamaskOpen(true);
+    //         signIn().then((address) => {
+    //           return getOneTimeCode({ address }).then((async (response) => {
+    //             const code = response.data.code;
+    //             const message = `${address} your one time code is: ${code}`;
 
-                // request user to sign message with metamask
-                let signedMessage = await signMessage(message, address);
-                let verifyResponse = await decodeOneTimeCode({ signedMessage, originalMessage: message, address });
-                if (verifyResponse.data.message) {
-                  const token = verifyResponse.data.token;
-                  // firebase sign in with token
-                  return signInWithCustomToken(auth, token).then((userCredential) => {
-                    window.location.reload();
-                  });
-                }
-              }));
-            }).finally(() => setMetamaskOpen(false));
-          }}>Link Metamask</StylizedButton>
-          <p style={{
-            color: '#ffffffcc'
-          }}>To prevent server overload, only <StylizedA href='https://dexscreener.com/ethereum/0x433a00819c771b33fa7223a5b3499b24fbcd1bbc' target='_blank' theme={{
-            colors: {
-              text: '#ffffff'
-            }
-          }}>$wTAO</StylizedA> holders are authorized to generate.</p>
-        </>
-      ) : null}
-    </CenterDiv>
+    //             // request user to sign message with metamask
+    //             let signedMessage = await signMessage(message, address);
+    //             let verifyResponse = await decodeOneTimeCode({ signedMessage, originalMessage: message, address });
+    //             if (verifyResponse.data.message) {
+    //               const token = verifyResponse.data.token;
+    //               // firebase sign in with token
+    //               return signInWithCustomToken(auth, token).then((userCredential) => {
+    //                 window.location.reload();
+    //               });
+    //             }
+    //           }));
+    //         }).finally(() => setMetamaskOpen(false));
+    //       }}>Link Metamask</StylizedButton>
+    //       <p style={{
+    //         color: '#ffffffcc'
+    //       }}>To prevent server overload, only <StylizedA href='https://dexscreener.com/ethereum/0x433a00819c771b33fa7223a5b3499b24fbcd1bbc' target='_blank' theme={{
+    //         colors: {
+    //           text: '#ffffff'
+    //         }
+    //       }}>$wTAO</StylizedA> holders are authorized to generate.</p>
+    //     </>
+    //   ) : null}
+    // </CenterDiv>
   );
 };
 // Twitter sign-in function

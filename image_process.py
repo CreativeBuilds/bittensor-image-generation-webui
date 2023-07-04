@@ -6,13 +6,8 @@ import threading
 import uuid
 import time
 import copy
-from PIL import Image
 import base64
-import io
-from inference import predict_pil
-import heapq
 import asyncio
-import concurrent
 import hashlib
 
 DEFAULT_NUM_INFERENCE_STEPS = 50
@@ -301,13 +296,19 @@ def consume_queue():
                 ((miner_response, miner_request), model_type) = miners.get_response(uid)
                 if(miner_response != None):
                     if(miner_response.is_success):
-                        decoded_image = base64.b64decode(miner_response.image)
-                        image_hash = hashlib.sha256(decoded_image).hexdigest()
-                        parent_image = miner_request.image
-                        if(parent_image == None or parent_image == ''):
+                        try:
+                            decoded_image = base64.b64decode(miner_response.image)
+                            image_hash = hashlib.sha256(decoded_image).hexdigest()
+                        except:
+                            image_hash = ''
+                        try:
+                            parent_image = miner_request.image
+                            if(parent_image == None or parent_image == ''):
+                                parent_hash = ''
+                            else:
+                                parent_hash = hashlib.sha256(base64.b64decode(parent_image)).hexdigest()
+                        except:
                             parent_hash = ''
-                        else:
-                            parent_hash = hashlib.sha256(base64.b64decode(parent_image)).hexdigest()
                         images[uid] = {
                             "image": miner_response.image,
                             "image_hash": image_hash,

@@ -101,6 +101,12 @@ def verify_base64_image(base64_string):
 
 # process strings that have , in them, safe for csv
 def process_string(string):
+    # remove newlines
+    string = string.replace("\n", "")
+    # remove carriage returns
+    string = string.replace("\r", "")
+    # remove tabs
+    string = string.replace("\t", "")
     if "," in string:
         return f"\"{string}\""
     return string
@@ -159,7 +165,7 @@ def create_app(is_local):
         correlation_id = str(uuid.uuid4())
         seed = random_seed(0, 1000000000)
         time_to_loop = 60
-        request_body['seed'] = seed
+        request_body['seed'] = seed 
         request_body['correlation_id'] = correlation_id
         request_body['time_to_loop'] = time_to_loop
         request_body['user_id'] = user_id
@@ -246,7 +252,11 @@ def create_app(is_local):
                 return {"error": error_msg}, 400
 
             response = response.json()
-
+            try:
+                if response['error']:
+                    return response, 400
+            except:
+                pass
             all_images = response['data']['images']
 
             # send to scorer ip
