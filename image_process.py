@@ -9,9 +9,46 @@ import copy
 import base64
 import asyncio
 import hashlib
+import os
+import argparse
+import pydantic
+from PIL import Image
+from io import BytesIO
+import torchvision.transforms as transforms
 
 DEFAULT_NUM_INFERENCE_STEPS = 50
 DEFAULT_TIMEOUT = 15
+
+parser = argparse.ArgumentParser()
+parser.add_argument( '--netuid', type = int, default = 64 )
+parser.add_argument('--subtensor.chain_endpoint', type=str, default='wss://test.finney.opentensor.ai')
+parser.add_argument('--subtensor._mock', type=bool, default=False)
+bt.wallet.add_args( parser )
+bt.subtensor.add_args( parser )
+config = bt.config( parser )
+
+wallet = bt.wallet(config = config )
+dendrite = bt.dendrite( wallet = wallet)
+
+class TextToImage( bt.Synapse ):
+    images: list[ bt.Tensor ] = []
+    text: str = pydantic.Field( ... , allow_mutation = False)
+    height: int = pydantic.Field( 512 , allow_mutation = False)
+    width: int = pydantic.Field( 512 , allow_mutation = False)
+    num_images_per_prompt: int = pydantic.Field( 1 , allow_mutation = False)
+    num_inference_steps: int = 20
+    guidance_scale: float = 7.5
+    negative_prompt: str = pydantic.Field( ... , allow_mutation = False)
+    seed: int = pydantic.Field( -1 , allow_mutation = False)
+
+class ImageToImage( TextToImage ):
+    image: bt.Tensor = pydantic.Field( ... , allow_mutation = False)
+    strength: float = 0.75
+
+transform = transforms.Compose([
+    transforms.PILToTensor()
+])
+
 
 def load_ips():
     with open("ips.txt") as f:
@@ -74,7 +111,7 @@ class Miner():
         if(len(mg.axons) == 0):
             raise ValueError('No axons in metagraph')
         self.axon = [x for x in mg.axons if x.ip == ip and x.port == port][0]
-        self.texttoimage = bt.text_to_image( keypair=wallet.hotkey, axon=self.axon)
+        # self.texttoimage = bt.text_to_image( keypair=wallet.hotkey, axon=self.axon) # this is a dendrite
         self.queue = [] # queue of images and responses to be processed (uid, ImageRequest)
         self.responses = {}  # A dictionary to store the responses
 
@@ -104,26 +141,44 @@ class Miner():
 
         if(image_response == None):
 
-            image_response = self.texttoimage.forward(
+            # convert image_request.image to a PIL image
+            image = Image.open(BytesIO(base64.b64decode(image_request.image)))
+
+            # convert image to tensor
+            image_tensor = transform(image)
+
+            imagetoimage = ImageToImage(
                 text = image_request.text,
                 negative_prompt = image_request.negative_prompt,
-                image = image_request.image,
+                image = bt.Tensor.serialize( image_tensor ),
                 width = image_request.width,
                 height = image_request.height,
                 guidance_scale = image_request.guidance_scale,
                 strength = image_request.strength,
                 num_images_per_prompt = 1,
                 num_inference_steps = DEFAULT_NUM_INFERENCE_STEPS,
-                timeout = DEFAULT_TIMEOUT
+            ) 
+
+            image_response = dendrite(
+                self.axon,
+                synapse=imagetoimage,
+                timeout=DEFAULT_TIMEOUT
             )
+
+            images = []
+            for j, image in enumerate(image_response.images):
+                image = transforms.ToPILImage()( bt.Tensor.deserialize( image ) )
+                # convert image to base64
+                buffered = BytesIO()
+                image.save(buffered, format="JPEG")
+                img_str = base64.b64encode(buffered.getvalue())
+                images.append(img_str)
             
-            bt.logging.trace(image_response)
-            self.responses[uid] = (image_response, image_request)
+            self.responses[uid] = (images[0], image_request)
 
             return None
 
         elif(valid_uid and image_response != None):
-            bt.logging.trace(image_response)
             self.queue.pop(0)
             return image_response
         else:
@@ -213,7 +268,17 @@ class Miners():
 
         # return response
         (response, request) = miner.get_response(uid)
-        return ((response, request), miner.model_type)
+        # check if string includes space in it
+        try:
+            if(response != None and type(response.image) == str and ' ' in response.image):
+                # response is error
+                return (((response, request), miner.model_type), True)
+        except Exception as e:
+            print(e)
+            print("FAILED TO CHECK IF RESPONSE IS ERROR")
+
+
+        return (((response, request), miner.model_type), False)
     
     def remove_response(self, uid):
         # check if uid is in uid_to_miner
@@ -234,8 +299,6 @@ class Miners():
     def __str__(self):
         return str([(str(miner), len(miner.queue)) for miner in self.miners])
         
-
-
 # Setup bittensor
 bt.trace()
 
@@ -254,118 +317,126 @@ miners = Miners(ips)
 
 # Connect to RabbitMQ on a separate thread
 def consume_queue():
-    # Connect to RabbitMQ
-    connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
-    channel = connection.channel()
+    try:
+        # Connect to RabbitMQ
+        connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+        channel = connection.channel()
 
-    bt.logging.trace("Connected to RabbitMQ")
-    
+        bt.logging.trace("Connected to RabbitMQ")
+        
 
-    def process_request(channel, method, properties, body):
-        # Process the requests
-        requests = json.loads(body)
-        bt.logging.trace("Received requests")
-        bt.logging.trace(requests)
-        # Perform the image processing on the request
+        def process_request(channel, method, properties, body):
+            # Process the requests
+            requests = json.loads(body)
+            bt.logging.trace("Received requests")
+            # Perform the image processing on the request
 
-        uids = []
-        for request in requests:
-            image_request = ImageRequest(
-                text=request['request']['text'],
-                negative_prompt=request['request']['negative_prompt'],
-                image = request['request']['image'],
-                width = request['request']['width'],
-                height = request['request']['height'],
-                guidance_scale = request['request']['guidance_scale'],
-                strength = request['request']['strength'],
-                seed = request['request']['seed'],
-                num_images_per_prompt = 1,
-                num_inference_steps = DEFAULT_NUM_INFERENCE_STEPS,
-                timeout = DEFAULT_TIMEOUT
-            )
-            model_type = request['request'].get('model_type') or None
-            miners.add_image(image_request, model_type=model_type, uid=request["uid"])
-            uids.append(request["uid"])
+            uids = []
+            for request in requests:
+                image_request = ImageRequest(
+                    text=request['request']['text'],
+                    negative_prompt=request['request']['negative_prompt'],
+                    image = request['request']['image'],
+                    width = request['request']['width'],
+                    height = request['request']['height'],
+                    guidance_scale = request['request']['guidance_scale'],
+                    strength = request['request']['strength'],
+                    seed = request['request']['seed'],
+                    num_images_per_prompt = 1,
+                    num_inference_steps = DEFAULT_NUM_INFERENCE_STEPS,
+                    timeout = DEFAULT_TIMEOUT
+                )
+                model_type = request['request'].get('model_type') or None
+                miners.add_image(image_request, model_type=model_type, uid=request["uid"])
+                uids.append(request["uid"])
 
-        images = {}
-        # wait for response
-        cloned_requests = copy.deepcopy(requests)
-        while True:
-            for request in cloned_requests:
-                uid = request["uid"]
-                ((miner_response, miner_request), model_type) = miners.get_response(uid)
-                if(miner_response != None):
-                    if(miner_response.is_success):
-                        try:
-                            decoded_image = base64.b64decode(miner_response.image)
-                            image_hash = hashlib.sha256(decoded_image).hexdigest()
-                        except:
-                            image_hash = ''
-                        try:
-                            parent_image = miner_request.image
-                            if(parent_image == None or parent_image == ''):
-                                parent_hash = ''
-                            else:
-                                parent_hash = hashlib.sha256(base64.b64decode(parent_image)).hexdigest()
-                        except:
-                            parent_hash = ''
-                        images[uid] = {
-                            "image": miner_response.image,
-                            "image_hash": image_hash,
-                            "parent_hash": parent_hash,
-                            "request": request["request"],
-                            "model_type": model_type,
-                        }
-                        try:
-                            # find uid 
-                            
-                            uids.remove(uid)
-                            # remove it from requests
-                        except ValueError:
-                            bt.logging.trace("Failed to remove uid from uids")
-                            pass
-                        try:
-                            cloned_requests.remove(request)
-                        except ValueError:
-                            bt.logging.trace("Failed to remove request from cloned_requests")
-                            pass
-                    else:
-                        bt.logging.error("Error processing image")
-                        bt.logging.error(miner_response)
+            images = {}
+            # wait for response
+            cloned_requests = copy.deepcopy(requests)
+            while True:
+                for request in cloned_requests:
+                    uid = request["uid"]
+                    (((miner_response, miner_request), model_type), failed) = miners.get_response(uid)
+                    if(failed):
+                        # remove uid from uids
+                        uids.remove(uid)
+                        print("Failed", uid, miner_response.image, miner_response.return_message)
+                        # remvoe it from requests
+                        cloned_requests.remove(request)
                         
-                        # remove response in miners
-                        miners.remove_response(uid)
+                    elif(miner_response != None):
+                        if(miner_response.is_success):
+                            try:
+                                decoded_image = base64.b64decode(miner_response.image)
+                                image_hash = hashlib.sha256(decoded_image).hexdigest()
+                            except:
+                                image_hash = ''
+                            try:
+                                parent_image = miner_request.image
+                                if(parent_image == None or parent_image == ''):
+                                    parent_hash = ''
+                                else:
+                                    parent_hash = hashlib.sha256(base64.b64decode(parent_image)).hexdigest()
+                            except:
+                                parent_hash = ''
+                            images[uid] = {
+                                "image": miner_response.image,
+                                "image_hash": image_hash,
+                                "parent_hash": parent_hash,
+                                "request": request["request"],
+                                "model_type": model_type,
+                            }
+                            try:
+                                # find uid 
+                                
+                                uids.remove(uid)
+                                # remove it from requests
+                            except ValueError:
+                                bt.logging.trace("Failed to remove uid from uids")
+                                pass
+                            try:
+                                cloned_requests.remove(request)
+                            except ValueError:
+                                bt.logging.trace("Failed to remove request from cloned_requests")
+                                pass
+                        else:
+                            bt.logging.error("Error processing image")
+                            bt.logging.error(miner_response)
+                            
+                            # remove response in miners
+                            miners.remove_response(uid)
 
-                        image_request = ImageRequest(
-                            text=request['request']['text'],
-                            negative_prompt=request['request']['negative_prompt'],
-                            image = request['request']['image'],
-                            width = request['request']['width'],
-                            height = request['request']['height'],
-                            guidance_scale = request['request']['guidance_scale'],
-                            strength = request['request']['strength'],
-                            seed = request['request']['seed'],
-                            num_images_per_prompt = 1,
-                            num_inference_steps = DEFAULT_NUM_INFERENCE_STEPS,
-                            timeout = DEFAULT_TIMEOUT
-                        )
+                            image_request = ImageRequest(
+                                text=request['request']['text'],
+                                negative_prompt=request['request']['negative_prompt'],
+                                image = request['request']['image'],
+                                width = request['request']['width'],
+                                height = request['request']['height'],
+                                guidance_scale = request['request']['guidance_scale'],
+                                strength = request['request']['strength'],
+                                seed = request['request']['seed'],
+                                num_images_per_prompt = 1,
+                                num_inference_steps = DEFAULT_NUM_INFERENCE_STEPS,
+                                timeout = DEFAULT_TIMEOUT
+                            )
 
-                        # if msg includes cannot identify image file
-                        position = -1
-                        try:
-                            position = miner_response.return_message.index("cannot identify image file")
-                        except ValueError:
-                            pass
+                            # if msg includes cannot identify image file
+                            position = -1
+                            try:
+                                position = miner_response.return_message.index("cannot identify image file")
+                            except ValueError:
+                                pass
 
-                        if (position > -1):
-                            # remove image from request
-                            image_request.image = ''
-                        # add image back to queue
-                        bt.logging.trace("Adding image back to queue")
-                        # wait 0.5 seconds
-                        time.sleep(0.5)
-                        miners.add_image(image_request, model_type=model_type, uid=uid)
+                            if (position > -1):
+                                # remove image from request
+                                image_request.image = ''
+                            # add image back to queue
+                            bt.logging.trace("Adding image back to queue")
+                            # wait 0.5 seconds
+                            time.sleep(0.5)
+                            miners.add_image(image_request, model_type=model_type, uid=uid)
 
+            if(len(uids) == 0):
             if(len(uids) == 0):
                 # process images for best 4 images
                 # scores = {}
@@ -385,59 +456,86 @@ def consume_queue():
                 # # get top 4 images
                 # for uid, score in top_4:
                 #     top_images[uid] = (images[uid], score)
-                break
+                if(len(uids) == 0):
+                # process images for best 4 images
+                # scores = {}
+                # bt.logging.trace("Predicting images")
+                # for uid in images:
+                #     image = images[uid]
+                #     # base64 decode image
+                #     pil_image = Image.open(io.BytesIO(base64.b64decode(image['image'])))
+
+                #     # run in new thread
+                #     predicted_image = predict_pil(pil_image)
+                    
+                #     scores[uid] = (uid, predicted_image) 
+                #     bt.logging.trace(f"{uid}: {scores[uid][1]:.2f}")
+                # # get top 4 images
+                # top_4 = heapq.nlargest(4, scores.values(), key=lambda x: x[1])
+                # # get top 4 images
+                # for uid, score in top_4:
+                #     top_images[uid] = (images[uid], score)
+                    break
 
 
-            time.sleep(0.1)
+                time.sleep(0.1)
 
-        # Create the response
-        bt.logging.trace("Creating response")
-        response = []
-        for uid in images:
-            image = images[uid]
-            # image = top_images[uid][0]
-            # score = top_images[uid][1]
-            response.append({
-                "uid": uid,
-                "image": image['image'],
-                "image_hash": image['image_hash'],
-                "parent_hash": image['parent_hash'],
-                "seed": image['request']['seed'],
-                "model_type": image['model_type'],
-                "resolution": f"{image['request']['width']}x{image['request']['height']}",
-            })
+            # Create the response
+            bt.logging.trace("Creating response")
+            response = []
+            for uid in images:
+                image = images[uid]
+                # image = top_images[uid][0]
+                # score = top_images[uid][1]
+                response.append({
+                    "uid": uid,
+                    "image": image['image'],
+                    "image_hash": image['image_hash'],
+                    "parent_hash": image['parent_hash'],
+                    "seed": image['request']['seed'],
+                    "model_type": image['model_type'],
+                    "resolution": f"{image['request']['width']}x{image['request']['height']}",
+                })
 
 
-        bt.logging.trace("Sending response")
-        bt.logging.trace(properties.reply_to)
+            bt.logging.trace("Sending response")
+            bt.logging.trace(properties.reply_to)
 
-        # Send the response back to the server using the provided correlation ID and reply_to queue
-        
-        body = {"images": response, "request_id": requests[0]["request_id"], "request": requests[0]["request"]}
+            # Send the response back to the server using the provided correlation ID and reply_to queue
+            
+            body = {"images": response, "request_id": requests[0]["request_id"], "request": requests[0]["request"]}
 
-        # create json dump
-        json_dump = json.dumps(body)
+            # create json dump
+            json_dump = json.dumps(body)
 
-        channel.basic_publish(
-            exchange='',
-            routing_key=properties.reply_to,
-            body=json_dump,
-            properties=pika.BasicProperties(
-                correlation_id=properties.correlation_id
+            channel.basic_publish(
+                exchange='',
+                routing_key=properties.reply_to,
+                body=json_dump,
+                properties=pika.BasicProperties(
+                    correlation_id=properties.correlation_id
+                )
             )
-        )
 
-        # Acknowledge the request message
-        channel.basic_ack(delivery_tag=method.delivery_tag)
+            # Acknowledge the request message
+            channel.basic_ack(delivery_tag=method.delivery_tag)
 
-    # create channel if doesnt exist
-    channel.queue_declare(queue='client_requests', durable=True)
+        # create channel if doesnt exist
+        channel.queue_declare(queue='client_requests', durable=True)
 
-    # Start consuming requests from the server
-    channel.basic_consume(queue='client_requests', on_message_callback=process_request)
+        # Start consuming requests from the server
+        channel.basic_consume(queue='client_requests', on_message_callback=process_request)
 
-    # Start consuming messages
-    channel.start_consuming()
+        # Start consuming messages
+    
+        channel.start_consuming()
+    # on disconnect
+    except:
+    #    kill application
+        bt.logging.error("Disconnected from server")
+
+        os._exit(1)        
+    
 
 
 bt.logging.trace("Starting consume thread")
@@ -448,7 +546,19 @@ bt.logging.trace("Started consume thread")
 # Start processing the queue
 bt.logging.trace("Starting queue processing")
 while True:
-    miners.process_queue()
-    time.sleep(0.5)
+    try:
+        miners.process_queue()
+        # check if consume thread is alive
+        if(not consume_thread.is_alive()):
+            bt.logging.error("Consume thread is dead")
+            os._exit(1)
+        time.sleep(0.5)
+    except Exception as e:
+        bt.logging.error("Error processing queue")
+        bt.logging.error(e)
+        time.sleep(0.5)
+        pass
 
+
+print("done processing queue")
 

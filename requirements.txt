@@ -11,3 +11,6 @@ webdataset
 pytorch_lightning
 torchvision
 git+https://github.com/openai/CLIP.git
+argparse
+pydantic
+torchvision

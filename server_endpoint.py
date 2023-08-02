@@ -32,8 +32,8 @@ DEFAULT_AXON_PORT = 9090
 DEFAULT_RESPONSE_TIMEOUT = 60
 DEFAULT_INFERENCE_STEPS = 90
 
-FORWARD_TO_IP = "127.0.0.1:8095"
-IMAGE_SCORER_IP = "127.0.0.1:8089"
+FORWARD_TO_IP = "127.0.0.1:8094"
+IMAGE_SCORER_IP = "127.0.0.1:8085"
 
 # auth values
 DEFAULT_MINIMUM_WTAO_BALANCE = 0
@@ -136,7 +136,7 @@ def create_app(is_local):
     # API endpoint to forward the request to the local API
     @app.route('/TextToImage/Forward', methods=['POST'])
     def forward_request():  
-
+        print("Forwarding request")
         request_body = {**request.json, 'num_images_per_prompt': 1}
 
         if NEEDS_AUTHENTICATION:
@@ -164,7 +164,7 @@ def create_app(is_local):
 
         correlation_id = str(uuid.uuid4())
         seed = random_seed(0, 1000000000)
-        time_to_loop = 60
+        time_to_loop = 15
         request_body['seed'] = seed 
         request_body['correlation_id'] = correlation_id
         request_body['time_to_loop'] = time_to_loop
@@ -258,6 +258,9 @@ def create_app(is_local):
             except:
                 pass
             all_images = response['data']['images']
+
+            if len(all_images) == 0:
+                return {"error": "No images generated"}, 400
 
             # send to scorer ip
             score_response = requests.post("http://" + IMAGE_SCORER_IP + "/TextToImage/Score", json={"request": request_body, "response": response})

@@ -32,9 +32,10 @@ export const NoBoundaryCookieTextarea = styled(CookieTextarea)`
   overflow: hidden;
   height: 2ch;
 
-  min-width: 50ch;
+  min-width: min(100vw, 50ch);
   // keep the text at the bottom of the input
   vertical-align: bottom;
+  padding: none;
   
   // animate border underlining when input is active
     border-bottom: 0px solid #0000000;

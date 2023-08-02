@@ -20,13 +20,11 @@ import requests
 
 from inference import predict_pil
 
-DEFAULT_PORT = 8095
+DEFAULT_PORT = 8085
 DEFAULT_AXON_IP = "127.0.0.1"
 DEFAULT_AXON_PORT = 9090
 DEFAULT_RESPONSE_TIMEOUT = 60
 DEFAULT_INFERENCE_STEPS = 90
-
-FORWARD_TO_IP = "127.0.0.1:8094"
 
 # auth values
 DEFAULT_MINIMUM_WTAO_BALANCE = 0
@@ -148,17 +146,23 @@ def create_app():
             response = request.get_json()['response']
             all_images = response['data']['images']
 
+
+
             if len(all_images) > 4:
                 print("more than 4 images!")
                 # determine top 4 images using predict_pil
                 image_score_pair = []
                 for image in all_images:
-                    image_bytes = base64.b64decode(image['image'])
-                    image_pil = Image.open(io.BytesIO(image_bytes))
-                    score = predict_pil(image_pil)
-                    image['aesthetic_score'] = score
-                    print(f"score: {score}")
-                    image_score_pair.append((image, score))
+                    try:
+                        image_bytes = base64.b64decode(image['image'])
+                        image_pil = Image.open(io.BytesIO(image_bytes))
+                        score = predict_pil(image_pil)
+                        image['aesthetic_score'] = score
+                        print(f"score: {score}")
+                        image_score_pair.append((image, score))
+                    except:
+                        print("error predicting image")
+                        print(image)
 
                 # remove all scores less than 5.0
                 image_score_pair_blocked = [pair for pair in image_score_pair if pair[1] < 4.61]

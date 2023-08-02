@@ -139,7 +139,6 @@ def create_app():
         try:
             response = request.json
 
-            print("trying to get images from response")
             all_images = response['data']['images']
             print('got all images', type(all_images))
 
