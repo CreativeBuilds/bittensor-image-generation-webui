@@ -139,8 +139,8 @@ def calculate_rewards_for_prompt_alignment(query, images: List[ Image.Image ]) -
         ranking, scores = scoring_model.inference_rank(query, images)
         # map ranking to top_images
         top_images = [ images[i - 1] for i in ranking ]
-        # convert scores from numpy to tensor
-        scores = torch.from_numpy( scores )
+        # convert scores from list to tensor
+        scores = torch.tensor( scores )
         scores, _ = torch.sort( scores, descending = True )
         # convert scores to array
         scores = scores.numpy()
