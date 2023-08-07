@@ -235,7 +235,10 @@ def create_app():
                         image_score_pair_blocked.append((image, 0))
                         print("got image score pair blocked")
                 print("past image score pair blocked")
-                percentage_blocked = (len(image_score_pair_blocked) / len(image_score_pair)) if len(image_score_pair) > 0 and len(image_score_pair_blocked) > 0 else 0
+                if len(image_score_pair) > 0 and len(image_score_pair_blocked) > 0:
+                    percentage_blocked = (len(image_score_pair_blocked) / len(image_score_pair))
+                else:
+                    percentage_blocked = 0
                 print(f"percentage blocked: {percentage_blocked}")
                 # # remove all scores less than 5.0
                 # image_score_pair_blocked = [pair for pair in image_score_pair if pair[1] < 4.61]
@@ -247,7 +250,7 @@ def create_app():
                 #     add_prompt_to_blocked(user_id, request_body['text'], request_body['negative_prompt'], percentage_blocked)
                 #     return {"error": "Too many images were blocked"}, 400
                 
-                non_blocked = [pair for pair in image_score_pair if pair[1] >= 4.61]
+                non_blocked = [pair for pair in image_score_pair if pair[1] > 0]
                 avg_image_scores = sum([pair[1] for pair in non_blocked]) / len(non_blocked)
                 
                 image_score_pair.sort(key=lambda x: x[1], reverse=True)
