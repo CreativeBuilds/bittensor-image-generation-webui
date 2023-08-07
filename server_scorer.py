@@ -138,10 +138,8 @@ def calculate_rewards_for_prompt_alignment(query, images: List[ Image.Image ]) -
     with torch.no_grad():
         ranking, scores = scoring_model.inference_rank(query, images)
         # map ranking to top_images
-        top_images = [ images[i - 1] for i in ranking ]
         # convert scores from list to tensor
         scores = torch.tensor( scores )
-        scores, _ = torch.sort( scores, descending = True )
         
     # if sum is 0 then return empty vector
     if torch.sum( scores ) == 0:
@@ -161,7 +159,7 @@ def calculate_rewards_for_prompt_alignment(query, images: List[ Image.Image ]) -
 
 
 
-    return (init_scores, top_images)
+    return (init_scores, images)
 
 def is_image_black(image):
     # Convert the image to grayscale to simplify the analysis
@@ -221,8 +219,11 @@ def create_app():
                 #         print(image)
                 print("calculating rewards")
                 scores, images = calculate_rewards_for_prompt_alignment(request_body['text'], [image['image'] for image in all_images])
+
+                # sort all images to match images
+                
                 print("got scores")
-                image_score_pair = list(zip(images, scores))
+                image_score_pair = list(zip(all_images, scores))
                 print("got image score pair")
                 print(scores)
 
