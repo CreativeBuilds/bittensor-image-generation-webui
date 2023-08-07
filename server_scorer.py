@@ -163,10 +163,7 @@ def calculate_rewards_for_prompt_alignment(query, images: List[ Image.Image ]) -
 
     return (init_scores, top_images)
 
-def is_image_black(image_path):
-    # Open the image using Pillow
-    image = Image.open(image_path)
-
+def is_image_black(image):
     # Convert the image to grayscale to simplify the analysis
     grayscale_image = image.convert('L')
 
