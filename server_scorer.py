@@ -25,7 +25,7 @@ from inference import predict_pil
 import ImageReward as RM
 scoring_model = RM.load("ImageReward-v1.0")
 
-DEFAULT_PORT = 8085
+DEFAULT_PORT = 3033
 DEFAULT_AXON_IP = "127.0.0.1"
 DEFAULT_AXON_PORT = 9090
 DEFAULT_RESPONSE_TIMEOUT = 60
@@ -136,7 +136,7 @@ def calculate_rewards_for_prompt_alignment(query, images: List[ Image.Image ]) -
 
     # Takes the original query and a list of responses, returns a tensor of rewards equal to the length of the responses.
     with torch.no_grad():
-        ranking, scores = scoring_model.inference_rank(query.text, images)
+        ranking, scores = scoring_model.inference_rank(query, images)
         # map ranking to top_images
         top_images = [ images[i] for i in ranking ]
         # sort scores best to worst
@@ -188,8 +188,7 @@ def create_app():
     def forward_request():  
 
         request_body = request.get_json()['request']
-        # convert to json
-        request_body = json.loads(request_body)
+        
 
         user_id = request_body['user_id']
 
@@ -214,7 +213,9 @@ def create_app():
                 #     except:
                 #         print("error predicting image")
                 #         print(image)
+                print("calculating rewards")
                 scores, images = calculate_rewards_for_prompt_alignment(request_body['text'], all_images)
+                print("got scores")
                 image_score_pair = list(zip(images, scores))
 
                 # detect if image is all black ie. blocked
