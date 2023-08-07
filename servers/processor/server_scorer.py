@@ -10,9 +10,9 @@ from typing import List
 
 from waitress import serve
 
-from ...inference import predict_pil
-from ..._utils._DEFAULTS import *
-from ..._utils.handle_outputs import add_prompt_to_file, GetPassedObj, GetBlockedObj
+from inference import predict_pil
+from _utils._DEFAULTS import *
+from _utils.handle_outputs import add_prompt_to_file, GetPassedObj, GetBlockedObj
 
 import ImageReward as RM
 scoring_model = RM.load("ImageReward-v1.0")
