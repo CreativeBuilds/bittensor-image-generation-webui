@@ -223,6 +223,8 @@ def create_app():
                 scores, images = calculate_rewards_for_prompt_alignment(request_body['text'], [image['image'] for image in all_images])
                 print("got scores")
                 image_score_pair = list(zip(images, scores))
+                print("got image score pair")
+                print(scores)
 
                 # detect if image is all black ie. blocked
                 image_score_pair_blocked = []
@@ -231,9 +233,10 @@ def create_app():
                         # set score in image_score_pair to 0
                         image_score_pair[i] = (image, 0)
                         image_score_pair_blocked.append((image, 0))
+                        print("got image score pair blocked")
                     
                 percentage_blocked = (len(image_score_pair_blocked) / len(image_score_pair)) if len(image_score_pair) > 0 and len(image_score_pair_blocked) > 0 else 0
-
+                print(f"percentage blocked: {percentage_blocked}")
                 # # remove all scores less than 5.0
                 # image_score_pair_blocked = [pair for pair in image_score_pair if pair[1] < 4.61]
                 # # get percentage of images that were blocked
