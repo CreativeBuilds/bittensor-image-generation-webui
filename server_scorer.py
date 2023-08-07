@@ -196,6 +196,12 @@ def create_app():
             response = request.get_json()['response']
             all_images = response['data']['images']
 
+            # convert all_images from base64 to PIL
+            for image in all_images:
+                image_bytes = base64.b64decode(image['image'])
+                image_pil = Image.open(io.BytesIO(image_bytes))
+                image['image'] = image_pil
+
 
 
             if len(all_images) > 4:
@@ -214,7 +220,7 @@ def create_app():
                 #         print("error predicting image")
                 #         print(image)
                 print("calculating rewards")
-                scores, images = calculate_rewards_for_prompt_alignment(request_body['text'], all_images)
+                scores, images = calculate_rewards_for_prompt_alignment(request_body['text'], [image['image'] for image in all_images])
                 print("got scores")
                 image_score_pair = list(zip(images, scores))
 
