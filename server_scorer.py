@@ -237,7 +237,7 @@ def create_app():
                         image_score_pair[i] = (image, 0)
                         image_score_pair_blocked.append((image, 0))
                         print("got image score pair blocked")
-                    
+                print("past image score pair blocked")
                 percentage_blocked = (len(image_score_pair_blocked) / len(image_score_pair)) if len(image_score_pair) > 0 and len(image_score_pair_blocked) > 0 else 0
                 print(f"percentage blocked: {percentage_blocked}")
                 # # remove all scores less than 5.0
@@ -259,7 +259,7 @@ def create_app():
                 top_4_image_seeds = [pair[0]['seed'] for pair in image_score_pair[:4]]
 
                 resolution = image_score_pair[0][0]['resolution']
-                print(image_score_pair[0][0].keys())
+                print(image_score_pair[0][0].keys(), "keys")
                 image_hashes = [pair[0]['image_hash'] for pair in image_score_pair[:4]]
                 parent_hashes = [pair[0]['parent_hash'] for pair in image_score_pair[:4]]
                 # filter hashes for None or ''
@@ -268,13 +268,14 @@ def create_app():
                 # deduplicate hashes
                 parent_hashes_dedupe = list(set(parent_hashes))
                 models = [pair[0]['model_type'] for pair in image_score_pair[:4]]
-
+                print("adding prompt to passed")
                 add_prompt_to_passed(user_id, request_body['text'], request_body['negative_prompt'], resolution, avg_image_scores,models, top_4_images_scores, top_4_image_seeds, percentage_blocked,image_hashes, parent_hashes_dedupe if len(parent_hashes_dedupe) == 1 else parent_hashes)
                 # print scores
                 for pair in image_score_pair:
                     bt.logging.trace(pair[1], pair[0]['model_type'])
                 top_4_images_and_scores = image_score_pair[:4]
                 top_4_images = [image[0] for image in top_4_images_and_scores]
+                print('got top 4 images')
                 # print model and score for each image
                 for image in top_4_images_and_scores:
                     score = image[1]
