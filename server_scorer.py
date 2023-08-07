@@ -188,6 +188,8 @@ def create_app():
     def forward_request():  
 
         request_body = request.get_json()['request']
+        # convert to json
+        request_body = json.loads(request_body)
 
         user_id = request_body['user_id']
 
