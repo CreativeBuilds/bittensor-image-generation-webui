@@ -230,7 +230,9 @@ def create_app():
                 # detect if image is all black ie. blocked
                 image_score_pair_blocked = []
                 for i, (image, score) in enumerate(image_score_pair):
-                    if is_image_black(image):
+                    image_bytes = base64.b64decode(image['image'])
+                    image_pil = Image.open(io.BytesIO(image_bytes))
+                    if is_image_black(image_pil):
                         # set score in image_score_pair to 0
                         image_score_pair[i] = (image, 0)
                         image_score_pair_blocked.append((image, 0))
