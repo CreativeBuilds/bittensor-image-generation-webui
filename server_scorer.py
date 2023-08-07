@@ -14,11 +14,16 @@ import hashlib
 import datetime
 import time
 import bittensor as bt
+from typing import List
+import torch
 
 from waitress import serve
 import requests
 
 from inference import predict_pil
+
+import ImageReward as RM
+scoring_model = RM.load("ImageReward-v1.0")
 
 DEFAULT_PORT = 8085
 DEFAULT_AXON_IP = "127.0.0.1"
@@ -127,6 +132,50 @@ def add_prompt_to_passed(userid, prompt, negative_prompt, resolution, average_sc
         timestamp_in_milliseconds = int(round(time.time() * 1000))
         f.write(f"{timestamp_in_milliseconds},{userid},{average_score},{process_string(str(top_4_models))},{process_string(str(top_4_scores))},{process_string(str(top_4_seeds))},{process_string(str(image_hashes))},{process_string(str(parent_hashes))},{percentage_blocked},{process_string(prompt)},{process_string(negative_prompt)},{resolution}\n")
 
+def calculate_rewards_for_prompt_alignment(query, images: List[ Image.Image ]) -> (torch.FloatTensor, List[ Image.Image ]):
+
+    # Takes the original query and a list of responses, returns a tensor of rewards equal to the length of the responses.
+    with torch.no_grad():
+        ranking, scores = scoring_model.inference_rank(query.text, images)
+        # map ranking to top_images
+        top_images = [ images[i] for i in ranking ]
+        # sort scores best to worst
+        scores, _ = torch.sort( scores, descending = True )
+        # convert scores to array
+        scores = scores.numpy()
+
+    # if sum is 0 then return empty vector
+    if torch.sum( scores ) == 0:
+        return torch.zeros( len(scores), dtype = torch.float32 )
+
+    # preform exp on all values
+    init_scores = torch.exp( scores )
+
+    # set all values of 1 to 0
+    init_scores[init_scores == 1] = 0
+
+    # normalize the scores such that they sum to 1 but skip scores that are 0
+    init_scores = init_scores / torch.sum( init_scores )
+
+
+    return (init_scores, top_images)
+
+def is_image_black(image_path):
+    # Open the image using Pillow
+    image = Image.open(image_path)
+
+    # Convert the image to grayscale to simplify the analysis
+    grayscale_image = image.convert('L')
+
+    # Get the pixel data from the grayscale image
+    pixel_data = list(grayscale_image.getdata())
+
+    # Check if all pixels are black (i.e., have a value of 0)
+    is_black = all(pixel == 0 for pixel in pixel_data)
+
+    return is_black
+
+
 active_users = {}
 
 def create_app():
@@ -152,27 +201,39 @@ def create_app():
                 print("more than 4 images!")
                 # determine top 4 images using predict_pil
                 image_score_pair = []
-                for image in all_images:
-                    try:
-                        image_bytes = base64.b64decode(image['image'])
-                        image_pil = Image.open(io.BytesIO(image_bytes))
-                        score = predict_pil(image_pil)
-                        image['aesthetic_score'] = score
-                        print(f"score: {score}")
-                        image_score_pair.append((image, score))
-                    except:
-                        print("error predicting image")
-                        print(image)
+                # for image in all_images:
+                #     try:
+                #         image_bytes = base64.b64decode(image['image'])
+                #         image_pil = Image.open(io.BytesIO(image_bytes))
+                #         score = predict_pil(image_pil)
+                #         image['aesthetic_score'] = score
+                #         print(f"score: {score}")
+                #         image_score_pair.append((image, score))
+                #     except:
+                #         print("error predicting image")
+                #         print(image)
+                scores, images = calculate_rewards_for_prompt_alignment(request_body['text'], all_images)
+                image_score_pair = list(zip(images, scores))
 
-                # remove all scores less than 5.0
-                image_score_pair_blocked = [pair for pair in image_score_pair if pair[1] < 4.61]
-                # get percentage of images that were blocked
-                percentage_blocked = len(image_score_pair_blocked) / len(image_score_pair)
-                bt.logging.trace(f"percentage blocked: {percentage_blocked}")
-                # if more than 50% of images were blocked, return error
-                if percentage_blocked > 0.85:
-                    add_prompt_to_blocked(user_id, request_body['text'], request_body['negative_prompt'], percentage_blocked)
-                    return {"error": "Too many images were blocked"}, 400
+                # detect if image is all black ie. blocked
+                image_score_pair_blocked = []
+                for i, (image, score) in enumerate(image_score_pair):
+                    if is_image_black(image):
+                        # set score in image_score_pair to 0
+                        image_score_pair[i] = (image, 0)
+                        image_score_pair_blocked.append((image, 0))
+                    
+                percentage_blocked = (len(image_score_pair_blocked) / len(image_score_pair)) if len(image_score_pair) > 0 and len(image_score_pair_blocked) > 0 else 0
+
+                # # remove all scores less than 5.0
+                # image_score_pair_blocked = [pair for pair in image_score_pair if pair[1] < 4.61]
+                # # get percentage of images that were blocked
+                # percentage_blocked = len(image_score_pair_blocked) / len(image_score_pair)
+                # bt.logging.trace(f"percentage blocked: {percentage_blocked}")
+                # # if more than 50% of images were blocked, return error
+                # if percentage_blocked > 0.85:
+                #     add_prompt_to_blocked(user_id, request_body['text'], request_body['negative_prompt'], percentage_blocked)
+                #     return {"error": "Too many images were blocked"}, 400
                 
                 non_blocked = [pair for pair in image_score_pair if pair[1] >= 4.61]
                 avg_image_scores = sum([pair[1] for pair in non_blocked]) / len(non_blocked)
