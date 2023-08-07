@@ -282,6 +282,11 @@ def create_app():
                     score = image[1]
                     bt.logging.trace(f"score: {score} - model: {image[0]['model_type']}")
             else:
+                # convert all images back to base64 format jpg
+                for image in all_images:
+                    image_bytes = io.BytesIO()
+                    image['image'].save(image_bytes, format='JPEG')
+                    image['image'] = base64.b64encode(image_bytes.getvalue()).decode('utf-8')
                 top_4_images = all_images
             
             # update response object to only be the top 4 images
