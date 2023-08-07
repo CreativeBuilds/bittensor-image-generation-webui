@@ -142,9 +142,7 @@ def calculate_rewards_for_prompt_alignment(query, images: List[ Image.Image ]) -
         # convert scores from list to tensor
         scores = torch.tensor( scores )
         scores, _ = torch.sort( scores, descending = True )
-        # convert scores to array
-        scores = scores.numpy()
-
+        
     # if sum is 0 then return empty vector
     if torch.sum( scores ) == 0:
         return torch.zeros( len(scores), dtype = torch.float32 )
@@ -157,6 +155,10 @@ def calculate_rewards_for_prompt_alignment(query, images: List[ Image.Image ]) -
 
     # normalize the scores such that they sum to 1 but skip scores that are 0
     init_scores = init_scores / torch.sum( init_scores )
+
+    # convert scores to array
+    init_scores = init_scores.numpy()
+
 
 
     return (init_scores, top_images)
