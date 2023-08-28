@@ -16,8 +16,8 @@ from PIL import Image
 from io import BytesIO
 import torchvision.transforms as transforms
 
-DEFAULT_NUM_INFERENCE_STEPS = 50
-DEFAULT_TIMEOUT = 15
+DEFAULT_NUM_INFERENCE_STEPS = 30
+DEFAULT_TIMEOUT = 40
 
 parser = argparse.ArgumentParser()
 parser.add_argument( '--netuid', type = int, default = 64 )
@@ -82,6 +82,22 @@ class ImageRequest():
     def __init__(self, text, negative_prompt, image, width, height, guidance_scale, strength, timeout = 12, **kwargs):
         self.text = text
         self.negative_prompt = negative_prompt
+        if(type(image) == str):
+            # convert image to tensor
+            try:
+                print(type(image), "input type of image")
+                image = self.convert_str_to_pil(image)
+                if image is not None:
+                    try:
+                        image = transform(image)
+                    except Exception as e:
+                        print(e)
+                        print("FAILED TO CONVERT IMAGE TO TENSOR")
+                        image = None
+            except Exception as e:
+                print(e)
+                print("FAILED TO CONVERT IMAGE")
+                image = None
         self.image = image
         self.width = width
         self.height = height
@@ -91,6 +107,30 @@ class ImageRequest():
     
     def __call__(self):
         return self
+    
+    def convert_str_to_pil(self, imagebase64):
+        # imageasbytes = base64.b64decode(imagebase64)
+        # img = BytesIO(imageasbytes)
+        # return Image.open(img)
+        # the above returns the error "OSError: cannot identify image file <_io.BytesIO object at 0x7f8b1c0b4b80>"
+        # so we use the following instead
+        try:
+            print(type(imagebase64), "input type of imagebase64")
+            image = Image.open(BytesIO(base64.b64decode(imagebase64)))
+            return image
+        except Exception as e:
+            print(e)
+            print("FAILED TO CONVERT IMAGE TO PIL")
+            return None
+        
+class ImageResponse():
+    image = ""
+    is_success = False
+    def __init__(self, image):
+        self.image = image
+        self.is_success = True
+        if image == None:
+            self.is_success = False
 
 class Miner():
     axon = None
@@ -140,28 +180,39 @@ class Miner():
             self.responses[uid] = (None, image_request)
 
         if(image_response == None):
+            try:
+                # convert image_request.image to a PIL image
+                image = Image.open(BytesIO(base64.b64decode(image_request.image)))
 
-            # convert image_request.image to a PIL image
-            image = Image.open(BytesIO(base64.b64decode(image_request.image)))
+                # convert image to tensor
+                image_tensor = transform(image)
 
-            # convert image to tensor
-            image_tensor = transform(image)
+                synapse = ImageToImage(
+                    text = image_request.text,
+                    negative_prompt = image_request.negative_prompt,
+                    image = bt.Tensor.serialize( image_tensor ),
+                    width = image_request.width,
+                    height = image_request.height,
+                    guidance_scale = image_request.guidance_scale,
+                    strength = image_request.strength,
+                    num_images_per_prompt = 1,
+                    num_inference_steps = DEFAULT_NUM_INFERENCE_STEPS,
+                )
+            except:
+                synapse = TextToImage(
+                    text = image_request.text,
+                    negative_prompt = image_request.negative_prompt,
+                    width = image_request.width,
+                    height = image_request.height,
+                    guidance_scale = image_request.guidance_scale,
+                    num_images_per_prompt = 1,
+                    num_inference_steps = DEFAULT_NUM_INFERENCE_STEPS,
+                )
 
-            imagetoimage = ImageToImage(
-                text = image_request.text,
-                negative_prompt = image_request.negative_prompt,
-                image = bt.Tensor.serialize( image_tensor ),
-                width = image_request.width,
-                height = image_request.height,
-                guidance_scale = image_request.guidance_scale,
-                strength = image_request.strength,
-                num_images_per_prompt = 1,
-                num_inference_steps = DEFAULT_NUM_INFERENCE_STEPS,
-            ) 
 
-            image_response = dendrite(
+            image_response = await dendrite(
                 self.axon,
-                synapse=imagetoimage,
+                synapse=synapse,
                 timeout=DEFAULT_TIMEOUT
             )
 
@@ -172,9 +223,12 @@ class Miner():
                 buffered = BytesIO()
                 image.save(buffered, format="JPEG")
                 img_str = base64.b64encode(buffered.getvalue())
-                images.append(img_str)
+                images.append(img_str.decode('utf-8'))
             
-            self.responses[uid] = (images[0], image_request)
+            if len(images) == 0:
+                self.responses[uid] = (ImageResponse(None), image_request)
+            else:
+                self.responses[uid] = (ImageResponse(images[0]), image_request)
 
             return None
 
@@ -214,8 +268,12 @@ class Miners():
     # set up a miners object
     def __init__(self, ips):
         for ip in ips:
-            miner = Miner(ip=ip[0], port=ip[1], model_type=ip[2])
-            self.miners[miner] = []
+            try:
+                miner = Miner(ip=ip[0], port=ip[1], model_type=ip[2])
+                self.miners[miner] = []
+            except:
+                print("Error connecting to miner: " + ip[0] + ":" + str(ip[1]))
+                continue
 
     # add an image to the queue of the miner with the least images in its queue that matches the model_type if provided
     def add_image(self, image_request, model_type = None, uid = None):
@@ -238,7 +296,8 @@ class Miners():
             miner = min(self.miners, key=lambda miner: len(miner.queue))
 
         # add image_request to miner's queue
-        uid = miner.add_image(image_request, uid)
+        print(type(image_request), "is this bytes?")
+        uid = miner.add_image(image_request=image_request, uid=uid)
         # add uid to uid_to_miner
         self.uid_to_miner[uid] = miner
 
@@ -270,11 +329,12 @@ class Miners():
         (response, request) = miner.get_response(uid)
         # check if string includes space in it
         try:
-            if(response != None and type(response.image) == str and ' ' in response.image):
+            if(response != None  and type(response.image) == str and ' ' in response.image):
                 # response is error
                 return (((response, request), miner.model_type), True)
         except Exception as e:
             print(e)
+            print(dir(response), type(response))
             print("FAILED TO CHECK IF RESPONSE IS ERROR")
 
 
@@ -304,7 +364,7 @@ bt.trace()
 
 # st = bt.subtensor(chain_endpoint="test.finney.opentensor.ai:443")
 
-mg = bt.metagraph(netuid=14, network='test')
+mg = bt.metagraph(netuid=64, network='test')
 mg.sync()
 
 # Setup wallet
@@ -333,22 +393,28 @@ def consume_queue():
 
             uids = []
             for request in requests:
-                image_request = ImageRequest(
-                    text=request['request']['text'],
-                    negative_prompt=request['request']['negative_prompt'],
-                    image = request['request']['image'],
-                    width = request['request']['width'],
-                    height = request['request']['height'],
-                    guidance_scale = request['request']['guidance_scale'],
-                    strength = request['request']['strength'],
-                    seed = request['request']['seed'],
-                    num_images_per_prompt = 1,
-                    num_inference_steps = DEFAULT_NUM_INFERENCE_STEPS,
-                    timeout = DEFAULT_TIMEOUT
-                )
-                model_type = request['request'].get('model_type') or None
-                miners.add_image(image_request, model_type=model_type, uid=request["uid"])
-                uids.append(request["uid"])
+                try:
+                    image_request = ImageRequest(
+                        text=request['request']['text'],
+                        negative_prompt=request['request']['negative_prompt'],
+                        image = request['request']['image'],
+                        width = request['request']['width'],
+                        height = request['request']['height'],
+                        guidance_scale = request['request']['guidance_scale'],
+                        strength = request['request']['strength'],
+                        seed = request['request']['seed'],
+                        num_images_per_prompt = 1,
+                        num_inference_steps = DEFAULT_NUM_INFERENCE_STEPS,
+                        timeout = DEFAULT_TIMEOUT
+                    )
+                    model_type = request['request'].get('model_type') or None
+                    miners.add_image(image_request, model_type=model_type, uid=request["uid"])
+                    uids.append(request["uid"])
+                except Exception as e:
+                    bt.logging.error("Error processing request")
+                    bt.logging.error(e)
+                    bt.logging.error(request)
+                    pass
 
             images = {}
             # wait for response
@@ -436,47 +502,8 @@ def consume_queue():
                             time.sleep(0.5)
                             miners.add_image(image_request, model_type=model_type, uid=uid)
 
-            if(len(uids) == 0):
-            if(len(uids) == 0):
-                # process images for best 4 images
-                # scores = {}
-                # bt.logging.trace("Predicting images")
-                # for uid in images:
-                #     image = images[uid]
-                #     # base64 decode image
-                #     pil_image = Image.open(io.BytesIO(base64.b64decode(image['image'])))
-
-                #     # run in new thread
-                #     predicted_image = predict_pil(pil_image)
-                    
-                #     scores[uid] = (uid, predicted_image) 
-                #     bt.logging.trace(f"{uid}: {scores[uid][1]:.2f}")
-                # # get top 4 images
-                # top_4 = heapq.nlargest(4, scores.values(), key=lambda x: x[1])
-                # # get top 4 images
-                # for uid, score in top_4:
-                #     top_images[uid] = (images[uid], score)
                 if(len(uids) == 0):
-                # process images for best 4 images
-                # scores = {}
-                # bt.logging.trace("Predicting images")
-                # for uid in images:
-                #     image = images[uid]
-                #     # base64 decode image
-                #     pil_image = Image.open(io.BytesIO(base64.b64decode(image['image'])))
-
-                #     # run in new thread
-                #     predicted_image = predict_pil(pil_image)
-                    
-                #     scores[uid] = (uid, predicted_image) 
-                #     bt.logging.trace(f"{uid}: {scores[uid][1]:.2f}")
-                # # get top 4 images
-                # top_4 = heapq.nlargest(4, scores.values(), key=lambda x: x[1])
-                # # get top 4 images
-                # for uid, score in top_4:
-                #     top_images[uid] = (images[uid], score)
                     break
-
 
                 time.sleep(0.1)
 
