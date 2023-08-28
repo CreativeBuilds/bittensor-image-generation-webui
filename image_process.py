@@ -72,7 +72,8 @@ def load_ips():
 class ImageRequest():
     text = ""
     negative_prompt = "" 
-    image = ""
+    image = None
+    image_str = ""
     width = 512
     height = 512
     gudiance_scale = 7.5
@@ -83,20 +84,19 @@ class ImageRequest():
         self.text = text
         self.negative_prompt = negative_prompt
         if(type(image) == str):
-            # convert image to tensor
+            print("converting image to tensor")
             try:
-                print(type(image), "input type of image")
+                self.image_str = image
+                print("converting to pil")
                 image = self.convert_str_to_pil(image)
-                if image is not None:
-                    try:
-                        image = transform(image)
-                    except Exception as e:
-                        print(e)
-                        print("FAILED TO CONVERT IMAGE TO TENSOR")
-                        image = None
+                print("converting to tensor")
+                image = transform(image)
+                print("serializing tensor")
+                image = bt.Tensor.serialize(image)
+                print("done")
             except Exception as e:
+                print("error converting image to tensor")
                 print(e)
-                print("FAILED TO CONVERT IMAGE")
                 image = None
         self.image = image
         self.width = width
@@ -108,21 +108,15 @@ class ImageRequest():
     def __call__(self):
         return self
     
-    def convert_str_to_pil(self, imagebase64):
-        # imageasbytes = base64.b64decode(imagebase64)
-        # img = BytesIO(imageasbytes)
-        # return Image.open(img)
-        # the above returns the error "OSError: cannot identify image file <_io.BytesIO object at 0x7f8b1c0b4b80>"
-        # so we use the following instead
-        try:
-            print(type(imagebase64), "input type of imagebase64")
-            image = Image.open(BytesIO(base64.b64decode(imagebase64)))
-            return image
-        except Exception as e:
-            print(e)
-            print("FAILED TO CONVERT IMAGE TO PIL")
-            return None
-        
+    def convert_str_to_pil(self, imageasbase64str):
+        print("converting image string to bytes")
+        imageasbytes = base64.b64decode(imageasbase64str)
+        print("converting to BytesIO")
+        img = BytesIO(imageasbytes)
+        print("opening image")
+        image = Image.open(img)
+        return image
+    
 class ImageResponse():
     image = ""
     is_success = False
@@ -131,7 +125,7 @@ class ImageResponse():
         self.is_success = True
         if image == None:
             self.is_success = False
-
+            
 class Miner():
     axon = None
     ip = None
@@ -296,8 +290,7 @@ class Miners():
             miner = min(self.miners, key=lambda miner: len(miner.queue))
 
         # add image_request to miner's queue
-        print(type(image_request), "is this bytes?")
-        uid = miner.add_image(image_request=image_request, uid=uid)
+        uid = miner.add_image(image_request, uid=uid)
         # add uid to uid_to_miner
         self.uid_to_miner[uid] = miner
 
@@ -329,12 +322,11 @@ class Miners():
         (response, request) = miner.get_response(uid)
         # check if string includes space in it
         try:
-            if(response != None  and type(response.image) == str and ' ' in response.image):
+            if(response != None and type(response.image) == str and ' ' in response.image):
                 # response is error
                 return (((response, request), miner.model_type), True)
         except Exception as e:
             print(e)
-            print(dir(response), type(response))
             print("FAILED TO CHECK IF RESPONSE IS ERROR")
 
 
@@ -393,28 +385,22 @@ def consume_queue():
 
             uids = []
             for request in requests:
-                try:
-                    image_request = ImageRequest(
-                        text=request['request']['text'],
-                        negative_prompt=request['request']['negative_prompt'],
-                        image = request['request']['image'],
-                        width = request['request']['width'],
-                        height = request['request']['height'],
-                        guidance_scale = request['request']['guidance_scale'],
-                        strength = request['request']['strength'],
-                        seed = request['request']['seed'],
-                        num_images_per_prompt = 1,
-                        num_inference_steps = DEFAULT_NUM_INFERENCE_STEPS,
-                        timeout = DEFAULT_TIMEOUT
-                    )
-                    model_type = request['request'].get('model_type') or None
-                    miners.add_image(image_request, model_type=model_type, uid=request["uid"])
-                    uids.append(request["uid"])
-                except Exception as e:
-                    bt.logging.error("Error processing request")
-                    bt.logging.error(e)
-                    bt.logging.error(request)
-                    pass
+                image_request = ImageRequest(
+                    text=request['request']['text'],
+                    negative_prompt=request['request']['negative_prompt'],
+                    image = request['request']['image'],
+                    width = request['request']['width'],
+                    height = request['request']['height'],
+                    guidance_scale = request['request']['guidance_scale'],
+                    strength = request['request']['strength'],
+                    seed = request['request']['seed'],
+                    num_images_per_prompt = 1,
+                    num_inference_steps = DEFAULT_NUM_INFERENCE_STEPS,
+                    timeout = DEFAULT_TIMEOUT
+                )
+                model_type = request['request'].get('model_type') or None
+                miners.add_image(image_request, model_type=model_type, uid=request["uid"])
+                uids.append(request["uid"])
 
             images = {}
             # wait for response
@@ -489,7 +475,9 @@ def consume_queue():
                             # if msg includes cannot identify image file
                             position = -1
                             try:
-                                position = miner_response.return_message.index("cannot identify image file")
+                                # if miner request has image and image is None set position to 0
+                                if(miner_request.image != None and miner_response.image == None):
+                                    position = 0
                             except ValueError:
                                 pass
 
@@ -502,8 +490,45 @@ def consume_queue():
                             time.sleep(0.5)
                             miners.add_image(image_request, model_type=model_type, uid=uid)
 
+                # process images for best 4 images
+                # scores = {}
+                # bt.logging.trace("Predicting images")
+                # for uid in images:
+                #     image = images[uid]
+                #     # base64 decode image
+                #     pil_image = Image.open(io.BytesIO(base64.b64decode(image['image'])))
+
+                #     # run in new thread
+                #     predicted_image = predict_pil(pil_image)
+                    
+                #     scores[uid] = (uid, predicted_image) 
+                #     bt.logging.trace(f"{uid}: {scores[uid][1]:.2f}")
+                # # get top 4 images
+                # top_4 = heapq.nlargest(4, scores.values(), key=lambda x: x[1])
+                # # get top 4 images
+                # for uid, score in top_4:
+                #     top_images[uid] = (images[uid], score)
                 if(len(uids) == 0):
+                # process images for best 4 images
+                # scores = {}
+                # bt.logging.trace("Predicting images")
+                # for uid in images:
+                #     image = images[uid]
+                #     # base64 decode image
+                #     pil_image = Image.open(io.BytesIO(base64.b64decode(image['image'])))
+
+                #     # run in new thread
+                #     predicted_image = predict_pil(pil_image)
+                    
+                #     scores[uid] = (uid, predicted_image) 
+                #     bt.logging.trace(f"{uid}: {scores[uid][1]:.2f}")
+                # # get top 4 images
+                # top_4 = heapq.nlargest(4, scores.values(), key=lambda x: x[1])
+                # # get top 4 images
+                # for uid, score in top_4:
+                #     top_images[uid] = (images[uid], score)
                     break
+
 
                 time.sleep(0.1)
 
@@ -557,10 +582,12 @@ def consume_queue():
     
         channel.start_consuming()
     # on disconnect
-    except:
+    except Exception as e:
     #    kill application
         bt.logging.error("Disconnected from server")
-
+        print("Disconnected from server")
+        bt.logging.error(e)
+        time.sleep(0.5)
         os._exit(1)        
     
 
@@ -578,8 +605,10 @@ while True:
         # check if consume thread is alive
         if(not consume_thread.is_alive()):
             bt.logging.error("Consume thread is dead")
+            time.sleep(0.5)
             os._exit(1)
         time.sleep(0.5)
+        print("processing queue loop done")
     except Exception as e:
         bt.logging.error("Error processing queue")
         bt.logging.error(e)
