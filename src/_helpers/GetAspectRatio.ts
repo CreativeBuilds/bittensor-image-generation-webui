@@ -1,6 +1,6 @@
 export function GetAspectRatio(ratio: string) {
   const aspectRatioArr = ratio.split(':').map(Number);
-  const minWidthHeight = 512;
+  const minWidthHeight = 768;
 
   let width = minWidthHeight;
   let height = minWidthHeight;

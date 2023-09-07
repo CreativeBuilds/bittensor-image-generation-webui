@@ -17,7 +17,7 @@ from io import BytesIO
 import torchvision.transforms as transforms
 
 DEFAULT_NUM_INFERENCE_STEPS = 30
-DEFAULT_TIMEOUT = 80
+DEFAULT_TIMEOUT = 40
 
 parser = argparse.ArgumentParser()
 parser.add_argument( '--netuid', type = int, default = 64 )
@@ -290,7 +290,7 @@ class Miners():
             miner = min(self.miners, key=lambda miner: len(miner.queue))
 
         # add image_request to miner's queue
-        uid = miner.add_image(image_request, uid=uid)
+        uid = miner.add_image(image_request, uid)
         # add uid to uid_to_miner
         self.uid_to_miner[uid] = miner
 
@@ -451,19 +451,6 @@ def consume_queue():
                             except ValueError:
                                 bt.logging.trace("Failed to remove request from cloned_requests")
                                 pass
-                        elif miner_response.image is None:
-                            try:
-                                # find uid 
-                                uids.remove(uid)
-                                # remove it from requests
-                            except ValueError:
-                                bt.logging.trace("Failed to remove uid from uids")
-                                pass
-                            try:
-                                cloned_requests.remove(request)
-                            except ValueError:
-                                bt.logging.trace("Failed to remove request from cloned_requests")
-                                pass
                         else:
                             bt.logging.error("Error processing image")
                             bt.logging.error(miner_response)
@@ -500,6 +487,7 @@ def consume_queue():
                             # add image back to queue
                             bt.logging.trace("Adding image back to queue")
                             # wait 0.5 seconds
+                            time.sleep(0.5)
                             miners.add_image(image_request, model_type=model_type, uid=uid)
 
                 # process images for best 4 images

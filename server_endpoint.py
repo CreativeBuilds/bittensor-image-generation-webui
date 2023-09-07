@@ -164,7 +164,7 @@ def create_app(is_local):
 
         correlation_id = str(uuid.uuid4())
         seed = random_seed(0, 1000000000)
-        time_to_loop = 15
+        time_to_loop = 10
         request_body['seed'] = seed 
         request_body['correlation_id'] = correlation_id
         request_body['time_to_loop'] = time_to_loop
