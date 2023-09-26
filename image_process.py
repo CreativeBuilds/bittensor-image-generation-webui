@@ -23,6 +23,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument( '--netuid', type = int, default = 64 )
 parser.add_argument('--subtensor.chain_endpoint', type=str, default='wss://test.finney.opentensor.ai')
 parser.add_argument('--subtensor._mock', type=bool, default=False)
+parser.add_argument('--ips', type=str, default='ips.txt')
+
 bt.wallet.add_args( parser )
 bt.subtensor.add_args( parser )
 config = bt.config( parser )
@@ -51,7 +53,7 @@ transform = transforms.Compose([
 
 
 def load_ips():
-    with open("ips.txt") as f:
+    with open(config.ips) as f:
         lines = f.readlines()
     ips = []
     for line in lines:

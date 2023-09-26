@@ -26,11 +26,16 @@ from firebase_admin import storage
 from waitress import serve
 import requests
 
-DEFAULT_PORT = 8093
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument('--port', type=int, default=8093, help='Port to run the server on')
+config = bt.config( parser )
+
+DEFAULT_PORT = config.port
 DEFAULT_AXON_IP = "127.0.0.1"
 DEFAULT_AXON_PORT = 9090
 DEFAULT_RESPONSE_TIMEOUT = 60
-DEFAULT_INFERENCE_STEPS = 90
+DEFAULT_INFERENCE_STEPS = 30
 
 FORWARD_TO_IP = "127.0.0.1:8094"
 IMAGE_SCORER_IP = "127.0.0.1:8085"
@@ -132,6 +137,8 @@ def create_app(is_local):
                 return send_from_directory('build', path)
             else:
                 return send_from_directory('build', 'index.html')
+            
+    round_robin_index = 0
 
     # API endpoint to forward the request to the local API
     @app.route('/TextToImage/Forward', methods=['POST'])
@@ -164,10 +171,10 @@ def create_app(is_local):
 
         correlation_id = str(uuid.uuid4())
         seed = random_seed(0, 1000000000)
-        time_to_loop = 10
+        amount_of_images = 5
         request_body['seed'] = seed 
         request_body['correlation_id'] = correlation_id
-        request_body['time_to_loop'] = time_to_loop
+        request_body['time_to_loop'] = amount_of_images
         request_body['user_id'] = user_id
         active_users[user_id] = (datetime.datetime.now(), correlation_id)
 
